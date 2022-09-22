@@ -22,17 +22,17 @@ struct ConstVar {
 }
 
 impl ConstVar {
-    const fn new<Key: 'static, Value: 'static>(value: Value) -> Self {
+    const fn new<Key: 'static, ValueTy: 'static>(value: ValueTy) -> Self {
         let key = unsafe { core::mem::transmute::<_, u64>(TypeId::of::<Key>()) };
-        let value_ty = unsafe { core::mem::transmute::<_, u64>(TypeId::of::<Value>()) };
+        let value_ty = unsafe { core::mem::transmute::<_, u64>(TypeId::of::<ValueTy>()) };
 
         let value_bytes = unsafe {
             let ptr = const_allocate(
-                core::mem::size_of::<Value>(),
-                core::mem::align_of::<Value>(),
+                core::mem::size_of::<ValueTy>(),
+                core::mem::align_of::<ValueTy>(),
             );
             core::ptr::write(ptr.cast(), value);
-            core::slice::from_raw_parts_mut(ptr.cast(), core::mem::size_of::<Value>())
+            core::slice::from_raw_parts_mut(ptr.cast(), core::mem::size_of::<ValueTy>())
         };
 
         Self {
@@ -119,16 +119,18 @@ impl ConstVars {
         Self(Self::slice_allocate(0))
     }
 
-    pub const fn assign<Key: 'static, Value: 'static>(self, value: Value) -> Self {
+    pub const fn assign<Key: 'static, ValueTy: 'static>(self, value: ValueTy) -> Self {
         Self(Self::slice_assign(
             self.0,
-            ConstVar::new::<Key, Value>(value),
+            ConstVar::new::<Key, ValueTy>(value),
         ))
     }
 
-    pub const fn get<Key: 'static, Value: 'static>(self) -> Value {
+    pub const fn get<Key: 'static, ValueTy: 'static>(self) -> ValueTy {
         let key = unsafe { core::mem::transmute::<_, u64>(TypeId::of::<Key>()) };
-        Self::slice_find(self.0, key).unwrap().into_inner::<Value>()
+        Self::slice_find(self.0, key)
+            .unwrap()
+            .into_inner::<ValueTy>()
     }
 }
 
@@ -137,5 +139,11 @@ pub struct ConstEnv<const VARS: ConstVars>;
 impl ConstEnv<{ ConstVars::empty() }> {
     pub const fn empty() -> Self {
         Self
+    }
+}
+
+impl<const VARS: ConstVars> ConstEnv<VARS> {
+    pub const fn get<Key: 'static, Value: 'static>(&self) -> Value {
+        VARS.get::<Key, Value>()
     }
 }

@@ -15,17 +15,13 @@ const fn assign<const VARS: ConstVars, const VALUE: ValueType>(
     ConstEnv
 }
 
-const fn get<const VARS: ConstVars>(_: &ConstEnv<VARS>) -> ValueType {
-    VARS.get::<Key, ValueType>()
-}
-
 fn main() {
     let value = const {
         let env = ConstEnv::empty();
         let env = assign::<_, 42>(env);
-        let v1 = get(&env);
+        let v1 = env.get::<Key, ValueType>();
         let env = assign::<_, 8>(env);
-        let v2 = get(&env);
+        let v2 = env.get::<Key, ValueType>();
         v1 + v2
     };
 

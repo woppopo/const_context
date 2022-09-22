@@ -1,8 +1,9 @@
 #![feature(adt_const_params)]
 #![feature(const_trait_impl)]
+#![feature(generic_const_exprs)]
 #![feature(inline_const)]
 
-use const_env::{ConstEnv, ConstEnvMap, ConstValue, ConstVarMap, ConstVariables};
+use const_env::{ConstEnv, ConstEnvAbstract, ConstEnvMap, ConstValue, ConstVarMap, ConstVariables};
 
 struct Name<const NAME: &'static str>;
 
@@ -19,12 +20,19 @@ impl const ConstVarMap for Add42 {
 
 struct MapEnv;
 
-impl<const VARS: ConstVariables> const ConstEnvMap<VARS> for MapEnv {
-    fn map_env() -> ConstVariables {
-        let a = VARS.get::<Name<"value1">, u32>();
-        let b = VARS.get::<Name<"value2">, u32>();
-        VARS.assign::<Name<"value3">>(ConstValue::new(a * b))
+impl const ConstEnvMap for MapEnv {
+    fn map_env(vars: ConstVariables) -> ConstVariables {
+        let a = vars.get::<Name<"value1">, u32>();
+        let b = vars.get::<Name<"value2">, u32>();
+        vars.assign::<Name<"value3">>(ConstValue::new(a * b))
     }
+}
+
+fn _somefunc<Env: ConstEnvAbstract>(env: Env) -> impl ConstEnvAbstract
+where
+    Env::New<{ MapEnv::map_env(Env::VARS) }>:,
+{
+    env.map_env::<MapEnv>()
 }
 
 fn main() {

@@ -1,4 +1,5 @@
 #![feature(adt_const_params)]
+#![feature(associated_type_defaults)]
 #![feature(const_heap)]
 #![feature(const_mut_refs)]
 #![feature(const_option)]
@@ -181,15 +182,15 @@ impl ConstEnv<{ ConstVariables::empty() }> {
 
 impl<const VARS: ConstVariables> ConstEnv<VARS> {
     #[must_use]
+    pub const fn get<Key: 'static, ValueTy: 'static>(&self) -> ValueTy {
+        VARS.get::<Key, ValueTy>()
+    }
+
+    #[must_use]
     pub const fn assign<Key: 'static, const VALUE: ConstValue>(
         self,
     ) -> ConstEnv<{ VARS.assign::<Key>(VALUE) }> {
         ConstEnv
-    }
-
-    #[must_use]
-    pub const fn get<Key: 'static, ValueTy: 'static>(&self) -> ValueTy {
-        VARS.get::<Key, ValueTy>()
     }
 
     #[must_use]
@@ -202,9 +203,9 @@ impl<const VARS: ConstVariables> ConstEnv<VARS> {
     }
 
     #[must_use]
-    pub const fn map_env<Map>(&self) -> ConstEnv<{ Map::map_env() }>
+    pub const fn map_env<Map>(&self) -> ConstEnv<{ Map::map_env(VARS) }>
     where
-        Map: ~const ConstEnvMap<VARS>,
+        Map: ~const ConstEnvMap,
     {
         ConstEnv
     }
@@ -218,6 +219,77 @@ pub trait ConstVarMap {
 }
 
 #[const_trait]
-pub trait ConstEnvMap<const VARS: ConstVariables> {
-    fn map_env() -> ConstVariables;
+pub trait ConstEnvMap {
+    fn map_env(vars: ConstVariables) -> ConstVariables;
+}
+
+pub trait ConstEnvAbstract {
+    const VARS: ConstVariables;
+
+    type New<const NEW: ConstVariables>: ConstEnvAbstract;
+
+    type Assign<Key, const VALUE: ConstValue>: ConstEnvAbstract = Self::New<{ Self::VARS.assign::<Key>(VALUE) }>
+    where
+        Key: 'static,
+        Self::New<{ Self::VARS.assign::<Key>(VALUE) }>:;
+
+    type Map<Key, Map>: ConstEnvAbstract = Self::New<{ Self::VARS.map::<Key, Map>() }>
+    where
+        Key: 'static,
+        Map: ~const ConstVarMap,
+        Self::New<{ Self::VARS.map::<Key, Map>() }>:;
+
+    type MapEnv<Map>: ConstEnvAbstract = Self::New<{ Map::map_env(Self::VARS) }>
+    where
+        Map: ~const ConstEnvMap,
+        Self::New<{ Map::map_env(Self::VARS) }>:;
+
+    #[must_use]
+    fn assign<Key: 'static, const VALUE: ConstValue>(self) -> Self::Assign<Key, VALUE>
+    where
+        Key: 'static,
+        Self::New<{ Self::VARS.assign::<Key>(VALUE) }>:;
+
+    #[must_use]
+    fn map<Key, Map>(self) -> Self::Map<Key, Map>
+    where
+        Key: 'static,
+        Map: ~const ConstVarMap,
+        Self::New<{ Self::VARS.map::<Key, Map>() }>:;
+
+    #[must_use]
+    fn map_env<Map>(self) -> Self::MapEnv<Map>
+    where
+        Map: ~const ConstEnvMap,
+        Self::New<{ Map::map_env(Self::VARS) }>:;
+}
+
+impl<const VARS: ConstVariables> const ConstEnvAbstract for ConstEnv<VARS> {
+    const VARS: ConstVariables = VARS;
+    type New<const NEW: ConstVariables> = ConstEnv<NEW>;
+
+    fn assign<Key: 'static, const VALUE: ConstValue>(self) -> Self::Assign<Key, VALUE>
+    where
+        Key: 'static,
+        Self::New<{ Self::VARS.assign::<Key>(VALUE) }>:,
+    {
+        ConstEnv
+    }
+
+    fn map<Key, Map>(self) -> Self::Map<Key, Map>
+    where
+        Key: 'static,
+        Map: ~const ConstVarMap,
+        Self::New<{ Self::VARS.map::<Key, Map>() }>:,
+    {
+        ConstEnv
+    }
+
+    fn map_env<Map>(self) -> Self::MapEnv<Map>
+    where
+        Map: ~const ConstEnvMap,
+        Self::New<{ Map::map_env(Self::VARS) }>:,
+    {
+        ConstEnv
+    }
 }

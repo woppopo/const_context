@@ -187,7 +187,6 @@ impl<const VARS: ConstVariables> ConstEnv<VARS> {
         VARS.get::<Key, ValueTy>()
     }
 
-    /*
     #[must_use]
     pub const fn assign<Key: 'static, const VALUE: ConstValue>(
         self,
@@ -211,7 +210,6 @@ impl<const VARS: ConstVariables> ConstEnv<VARS> {
     {
         ConstEnv
     }
-    */
 }
 
 #[const_trait]
@@ -226,6 +224,7 @@ pub trait ConstEnvMap {
     fn map_env(vars: ConstVariables) -> ConstVariables;
 }
 
+/*
 pub trait ConstEnvAbstract {
     const VARS: ConstVariables;
 
@@ -296,3 +295,4 @@ impl<const VARS: ConstVariables> const ConstEnvAbstract for ConstEnv<VARS> {
         ConstEnv
     }
 }
+*/

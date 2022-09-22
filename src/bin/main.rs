@@ -3,7 +3,7 @@
 #![feature(generic_const_exprs)]
 #![feature(inline_const)]
 
-use const_env::{ConstEnv, ConstEnvAbstract, ConstEnvMap, ConstValue, ConstVarMap, ConstVariables};
+use const_env::{ConstEnv, ConstEnvMap, ConstValue, ConstVarMap, ConstVariables};
 
 struct Name<const NAME: &'static str>;
 
@@ -28,11 +28,8 @@ impl const ConstEnvMap for MapEnv {
     }
 }
 
-fn _somefunc<Env: ConstEnvAbstract>(env: Env) -> impl ConstEnvAbstract
-where
-    Env::New<{ MapEnv::map_env(Env::VARS) }>:,
-{
-    env.map_env::<MapEnv>()
+fn _somefunc<const VARS: ConstVariables>(_: ConstEnv<VARS>) -> ConstEnv<{ MapEnv::map_env(VARS) }> {
+    ConstEnv
 }
 
 fn main() {

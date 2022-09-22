@@ -14,9 +14,13 @@
 use core::any::TypeId;
 use core::intrinsics::{const_allocate, const_deallocate};
 
+const fn eq_typeid(a: TypeId, b: TypeId) -> bool {
+    unsafe { core::mem::transmute::<_, u64>(a) == core::mem::transmute::<_, u64>(b) }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ConstValue {
-    ty: u64,
+    ty: TypeId,
     bytes: &'static [u8],
 }
 
@@ -25,26 +29,32 @@ impl ConstValue {
     where
         T: 'static,
     {
-        let ty = unsafe { core::mem::transmute::<_, u64>(TypeId::of::<T>()) };
         let bytes = unsafe {
             let ptr = const_allocate(core::mem::size_of::<T>(), core::mem::align_of::<T>());
             core::ptr::write(ptr.cast(), value);
             core::slice::from_raw_parts_mut(ptr.cast(), core::mem::size_of::<T>())
         };
 
-        Self { ty, bytes }
+        Self {
+            ty: TypeId::of::<T>(),
+            bytes,
+        }
     }
 
     const fn into_inner<T>(self) -> T
     where
         T: 'static,
     {
-        assert!(unsafe { core::mem::transmute::<_, u64>(TypeId::of::<T>()) == self.ty });
+        assert!(eq_typeid(TypeId::of::<T>(), self.ty));
         unsafe { core::ptr::read(self.bytes.as_ptr().cast()) }
     }
 }
 
-type ConstVariable = (u64, ConstValue);
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct ConstVariable {
+    key: TypeId,
+    val: ConstValue,
+}
 
 #[derive(PartialEq, Eq)]
 pub struct ConstVariables(&'static [ConstVariable]);
@@ -70,10 +80,10 @@ impl ConstVariables {
         };
     }
 
-    const fn slice_find(vars: &'static [ConstVariable], key: u64) -> Option<ConstVariable> {
+    const fn slice_find(vars: &'static [ConstVariable], key: TypeId) -> Option<ConstVariable> {
         let mut i = 0;
         while i < vars.len() {
-            if vars[i].0 == key {
+            if eq_typeid(vars[i].key, key) {
                 return Some(vars[i]);
             }
             i += 1;
@@ -89,7 +99,7 @@ impl ConstVariables {
 
         let mut i = 0;
         while i < vars.len() {
-            if vars[i].0 == var.0 {
+            if eq_typeid(vars[i].key, var.key) {
                 panic!("")
             }
 
@@ -111,7 +121,7 @@ impl ConstVariables {
 
         let mut i = 0;
         while i < vars.len() {
-            if vars[i].0 == var.0 {
+            if eq_typeid(vars[i].key, var.key) {
                 new[i] = var;
             } else {
                 new[i] = vars[i];
@@ -129,7 +139,7 @@ impl ConstVariables {
         vars: &'static [ConstVariable],
         var: ConstVariable,
     ) -> &'static [ConstVariable] {
-        if Self::slice_find(vars, var.0).is_some() {
+        if Self::slice_find(vars, var.key).is_some() {
             Self::slice_reassign(vars, var)
         } else {
             Self::slice_push(vars, var)
@@ -144,8 +154,13 @@ impl ConstVariables {
     where
         Key: 'static,
     {
-        let key = unsafe { core::mem::transmute::<_, u64>(TypeId::of::<Key>()) };
-        Self(Self::slice_assign(self.0, (key, value)))
+        Self(Self::slice_assign(
+            self.0,
+            ConstVariable {
+                key: TypeId::of::<Key>(),
+                val: value,
+            },
+        ))
     }
 
     pub const fn map<Key, Map>(self) -> Self
@@ -164,10 +179,9 @@ impl ConstVariables {
         Key: 'static,
         ValueTy: 'static,
     {
-        let key = unsafe { core::mem::transmute::<_, u64>(TypeId::of::<Key>()) };
-        Self::slice_find(self.0, key)
+        Self::slice_find(self.0, TypeId::of::<Key>())
             .unwrap()
-            .1
+            .val
             .into_inner::<ValueTy>()
     }
 }

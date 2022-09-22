@@ -43,7 +43,7 @@ impl ConstVar {
     }
 
     const fn into_inner<T: 'static>(self) -> T {
-        assert!(unsafe { core::mem::transmute::<_, u64>(TypeId::of::<T>()) == self.key });
+        assert!(unsafe { core::mem::transmute::<_, u64>(TypeId::of::<T>()) == self.value_ty });
         unsafe { core::ptr::read(self.value_bytes.as_ptr().cast()) }
     }
 }

@@ -5,22 +5,29 @@
 
 use const_env::{ConstEnv, ConstVars};
 
-const fn assign<const VARS: ConstVars, const VALUE: u32>(
+struct Key;
+
+type ValueType = u32;
+
+const fn assign<const VARS: ConstVars, const VALUE: ValueType>(
     _: ConstEnv<VARS>,
-) -> ConstEnv<{ VARS.assign::<u32, _>(VALUE) }> {
+) -> ConstEnv<{ VARS.assign::<Key, _>(VALUE) }> {
     ConstEnv
 }
 
-const fn get<const VARS: ConstVars>(_: &ConstEnv<VARS>) -> u32 {
-    VARS.get::<u32, u32>()
+const fn get<const VARS: ConstVars>(_: &ConstEnv<VARS>) -> ValueType {
+    VARS.get::<Key, ValueType>()
 }
 
 fn main() {
-    let env = ConstEnv::empty();
-    let env = assign::<_, 42>(env);
-    let v1 = get(&env);
-    let env = assign::<_, 8>(env);
-    let v2 = get(&env);
+    let value = const {
+        let env = ConstEnv::empty();
+        let env = assign::<_, 42>(env);
+        let v1 = get(&env);
+        let env = assign::<_, 8>(env);
+        let v2 = get(&env);
+        v1 + v2
+    };
 
-    println!("{}", v1 + v2);
+    println!("{}", value);
 }

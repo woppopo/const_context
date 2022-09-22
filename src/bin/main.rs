@@ -26,7 +26,7 @@ fn main() {
         let env = ConstEnv::empty();
         let env = env.assign::<Key, { ConstValue::new(42u32) }>();
         let v1 = env.get::<Key, u32>();
-        let env = env.assign::<Key, { ConstValue::new(42u32) }>();
+        let env = env.assign::<Key, { ConstValue::new(8u32) }>();
         let v2 = env.get::<Key, u32>();
         let env = env.map::<Key, Add42>();
         let v3 = env.get::<Key, u32>();

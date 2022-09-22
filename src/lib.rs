@@ -13,7 +13,7 @@
 #![feature(inline_const_pat)]
 
 use core::any::TypeId;
-use core::intrinsics::const_allocate;
+use core::intrinsics::{const_allocate, const_deallocate};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ConstValue {
@@ -52,13 +52,23 @@ pub struct ConstVariables(&'static [ConstVariable]);
 
 impl ConstVariables {
     const fn slice_allocate(size: usize) -> &'static mut [ConstVariable] {
-        let ptr = unsafe {
-            const_allocate(
+        unsafe {
+            let ptr = const_allocate(
                 core::mem::size_of::<ConstVariable>() * size,
+                core::mem::align_of::<ConstVariable>(),
+            );
+            core::slice::from_raw_parts_mut(ptr.cast(), size)
+        }
+    }
+
+    const fn slice_deallocate(vars: &'static [ConstVariable]) {
+        unsafe {
+            const_deallocate(
+                vars.as_ptr().cast_mut().cast(),
+                core::mem::size_of::<ConstVariable>() * vars.len(),
                 core::mem::align_of::<ConstVariable>(),
             )
         };
-        unsafe { core::slice::from_raw_parts_mut(ptr.cast(), size) }
     }
 
     const fn slice_find(vars: &'static [ConstVariable], key: u64) -> Option<ConstVariable> {
@@ -88,6 +98,8 @@ impl ConstVariables {
             i += 1;
         }
 
+        Self::slice_deallocate(vars);
+
         new[i] = var;
         new
     }
@@ -108,6 +120,8 @@ impl ConstVariables {
 
             i += 1;
         }
+
+        Self::slice_deallocate(vars);
 
         new
     }

@@ -168,16 +168,19 @@ impl ConstEnv<{ ConstVariables::empty() }> {
 }
 
 impl<const VARS: ConstVariables> ConstEnv<VARS> {
-    pub const fn get<Key: 'static, ValueTy: 'static>(&self) -> ValueTy {
-        VARS.get::<Key, ValueTy>()
-    }
-
+    #[must_use]
     pub const fn assign<Key: 'static, const VALUE: ConstValue>(
         self,
     ) -> ConstEnv<{ VARS.assign::<Key>(VALUE) }> {
         ConstEnv
     }
 
+    #[must_use]
+    pub const fn get<Key: 'static, ValueTy: 'static>(&self) -> ValueTy {
+        VARS.get::<Key, ValueTy>()
+    }
+
+    #[must_use]
     pub const fn map<Key, Map>(&self) -> ConstEnv<{ VARS.map::<Key, Map>() }>
     where
         Key: 'static,

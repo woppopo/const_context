@@ -137,7 +137,8 @@ impl ConstVariables {
     }
 
     pub const fn empty() -> Self {
-        Self(Self::slice_allocate(0))
+        const DUMMY: &'static [ConstVariable] = &[(0, ConstValue::new(0))];
+        Self(DUMMY)
     }
 
     pub const fn assign<Key>(self, value: ConstValue) -> Self
@@ -186,6 +187,7 @@ impl<const VARS: ConstVariables> ConstEnv<VARS> {
         VARS.get::<Key, ValueTy>()
     }
 
+    /*
     #[must_use]
     pub const fn assign<Key: 'static, const VALUE: ConstValue>(
         self,
@@ -209,6 +211,7 @@ impl<const VARS: ConstVariables> ConstEnv<VARS> {
     {
         ConstEnv
     }
+    */
 }
 
 #[const_trait]

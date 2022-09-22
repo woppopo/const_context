@@ -1,36 +1,37 @@
 #![feature(adt_const_params)]
+#![feature(const_trait_impl)]
 #![feature(generic_arg_infer)]
 #![feature(generic_const_exprs)]
 #![feature(inline_const)]
 
-use const_env::{ConstEnv, ConstVars};
+use const_env::{ConstEnv, ConstVar, ConstVarMap};
 
 struct Name<const NAME: &'static str>;
 
-const fn modify(value: u32) -> u32 {
-    value + 32
+type Key = Name<"value">;
+
+const fn var(value: u32) -> ConstVar {
+    ConstVar::new::<Key, u32>(value)
 }
 
-const fn assign_u32<const NAME: &'static str, const VALUE: u32, const VARS: ConstVars>(
-    _: ConstEnv<VARS>,
-) -> ConstEnv<{ VARS.assign::<Name<NAME>, _>(VALUE) }> {
-    ConstEnv
-}
+struct Add42;
 
-const fn modify_u32<const NAME: &'static str, const VARS: ConstVars>(
-    _: ConstEnv<VARS>,
-) -> ConstEnv<{ VARS.assign::<Name<NAME>, _>(modify(VARS.get::<Name<NAME>, _>())) }> {
-    ConstEnv
+impl const ConstVarMap for Add42 {
+    type ValueTy = u32;
+
+    fn map(value: Self::ValueTy) -> Self::ValueTy {
+        value + 42
+    }
 }
 
 fn main() {
     let value = const {
         let env = ConstEnv::empty();
-        let env = assign_u32::<"value", 42, _>(env);
+        let env = env.assign::<{ var(42) }>();
         let v1 = env.get::<Name<"value">, u32>();
-        let env = assign_u32::<"value", 8, _>(env);
+        let env = env.assign::<{ var(8) }>();
         let v2 = env.get::<Name<"value">, u32>();
-        let env = modify_u32::<"value", _>(env);
+        let env = env.map::<Key, Add42>();
         let v3 = env.get::<Name<"value">, u32>();
         v1 + v2 + v3
     };

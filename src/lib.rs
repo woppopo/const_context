@@ -138,10 +138,10 @@ impl ConstVariables {
     pub const fn map<Key, Map>(self) -> Self
     where
         Key: 'static,
-        Map: ~const ConstMap,
+        Map: ~const ConstVarMap,
     {
         let value = self.get::<Key, Map::Input>();
-        let value = Map::map(value);
+        let value = Map::map_var(value);
         let value = ConstValue::new(value);
         self.assign::<Key>(value)
     }
@@ -184,15 +184,28 @@ impl<const VARS: ConstVariables> ConstEnv<VARS> {
     pub const fn map<Key, Map>(&self) -> ConstEnv<{ VARS.map::<Key, Map>() }>
     where
         Key: 'static,
-        Map: ~const ConstMap,
+        Map: ~const ConstVarMap,
+    {
+        ConstEnv
+    }
+
+    #[must_use]
+    pub const fn map_env<Map>(&self) -> ConstEnv<{ Map::map_env() }>
+    where
+        Map: ~const ConstEnvMap<VARS>,
     {
         ConstEnv
     }
 }
 
 #[const_trait]
-pub trait ConstMap {
+pub trait ConstVarMap {
     type Input: 'static;
     type Output: 'static;
-    fn map(value: Self::Input) -> Self::Output;
+    fn map_var(value: Self::Input) -> Self::Output;
+}
+
+#[const_trait]
+pub trait ConstEnvMap<const VARS: ConstVariables> {
+    fn map_env() -> ConstVariables;
 }

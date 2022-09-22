@@ -16,64 +16,55 @@ use core::any::TypeId;
 use core::intrinsics::const_allocate;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct ConstVar {
-    key: u64,
-    value_ty: u64,
-    value_bytes: &'static [u8],
+pub struct ConstValue {
+    ty: u64,
+    bytes: &'static [u8],
 }
 
-impl ConstVar {
-    pub const fn new<Key, ValueTy>(value: ValueTy) -> Self
+impl ConstValue {
+    pub const fn new<T>(value: T) -> Self
     where
-        Key: 'static,
-        ValueTy: 'static,
+        T: 'static,
     {
-        let key = unsafe { core::mem::transmute::<_, u64>(TypeId::of::<Key>()) };
-        let value_ty = unsafe { core::mem::transmute::<_, u64>(TypeId::of::<ValueTy>()) };
-
-        let value_bytes = unsafe {
-            let ptr = const_allocate(
-                core::mem::size_of::<ValueTy>(),
-                core::mem::align_of::<ValueTy>(),
-            );
+        let ty = unsafe { core::mem::transmute::<_, u64>(TypeId::of::<T>()) };
+        let bytes = unsafe {
+            let ptr = const_allocate(core::mem::size_of::<T>(), core::mem::align_of::<T>());
             core::ptr::write(ptr.cast(), value);
-            core::slice::from_raw_parts_mut(ptr.cast(), core::mem::size_of::<ValueTy>())
+            core::slice::from_raw_parts_mut(ptr.cast(), core::mem::size_of::<T>())
         };
 
-        Self {
-            key,
-            value_ty,
-            value_bytes,
-        }
+        Self { ty, bytes }
     }
 
     const fn into_inner<T>(self) -> T
     where
         T: 'static,
     {
-        assert!(unsafe { core::mem::transmute::<_, u64>(TypeId::of::<T>()) == self.value_ty });
-        unsafe { core::ptr::read(self.value_bytes.as_ptr().cast()) }
+        assert!(unsafe { core::mem::transmute::<_, u64>(TypeId::of::<T>()) == self.ty });
+        unsafe { core::ptr::read(self.bytes.as_ptr().cast()) }
     }
 }
 
-#[derive(PartialEq, Eq)]
-pub struct ConstVars(&'static [ConstVar]);
+type ConstVariable = (u64, ConstValue);
 
-impl ConstVars {
-    const fn slice_allocate(size: usize) -> &'static mut [ConstVar] {
+#[derive(PartialEq, Eq)]
+pub struct ConstVariables(&'static [ConstVariable]);
+
+impl ConstVariables {
+    const fn slice_allocate(size: usize) -> &'static mut [ConstVariable] {
         let ptr = unsafe {
             const_allocate(
-                core::mem::size_of::<ConstVar>() * size,
-                core::mem::align_of::<ConstVar>(),
+                core::mem::size_of::<ConstVariable>() * size,
+                core::mem::align_of::<ConstVariable>(),
             )
         };
         unsafe { core::slice::from_raw_parts_mut(ptr.cast(), size) }
     }
 
-    const fn slice_find(vars: &'static [ConstVar], key: u64) -> Option<ConstVar> {
+    const fn slice_find(vars: &'static [ConstVariable], key: u64) -> Option<ConstVariable> {
         let mut i = 0;
         while i < vars.len() {
-            if vars[i].key == key {
+            if vars[i].0 == key {
                 return Some(vars[i]);
             }
             i += 1;
@@ -81,12 +72,15 @@ impl ConstVars {
         None
     }
 
-    const fn slice_push(vars: &'static [ConstVar], var: ConstVar) -> &'static [ConstVar] {
+    const fn slice_push(
+        vars: &'static [ConstVariable],
+        var: ConstVariable,
+    ) -> &'static [ConstVariable] {
         let new = Self::slice_allocate(vars.len() + 1);
 
         let mut i = 0;
         while i < vars.len() {
-            if vars[i].key == var.key {
+            if vars[i].0 == var.0 {
                 panic!("")
             }
 
@@ -98,12 +92,15 @@ impl ConstVars {
         new
     }
 
-    const fn slice_reassign(vars: &'static [ConstVar], var: ConstVar) -> &'static [ConstVar] {
+    const fn slice_reassign(
+        vars: &'static [ConstVariable],
+        var: ConstVariable,
+    ) -> &'static [ConstVariable] {
         let new = Self::slice_allocate(vars.len());
 
         let mut i = 0;
         while i < vars.len() {
-            if vars[i].key == var.key {
+            if vars[i].0 == var.0 {
                 new[i] = var;
             } else {
                 new[i] = vars[i];
@@ -115,8 +112,11 @@ impl ConstVars {
         new
     }
 
-    const fn slice_assign(vars: &'static [ConstVar], var: ConstVar) -> &'static [ConstVar] {
-        if Self::slice_find(vars, var.key).is_some() {
+    const fn slice_assign(
+        vars: &'static [ConstVariable],
+        var: ConstVariable,
+    ) -> &'static [ConstVariable] {
+        if Self::slice_find(vars, var.0).is_some() {
             Self::slice_reassign(vars, var)
         } else {
             Self::slice_push(vars, var)
@@ -127,17 +127,23 @@ impl ConstVars {
         Self(Self::slice_allocate(0))
     }
 
-    pub const fn assign(self, var: ConstVar) -> Self {
-        Self(Self::slice_assign(self.0, var))
+    pub const fn assign<Key>(self, value: ConstValue) -> Self
+    where
+        Key: 'static,
+    {
+        let key = unsafe { core::mem::transmute::<_, u64>(TypeId::of::<Key>()) };
+        Self(Self::slice_assign(self.0, (key, value)))
     }
 
     pub const fn map<Key, Map>(self) -> Self
     where
         Key: 'static,
-        Map: ~const ConstVarMap,
+        Map: ~const ConstMap,
     {
         let value = self.get::<Key, Map::Input>();
-        self.assign(ConstVar::new::<Key, Map::Output>(Map::map(value)))
+        let value = Map::map(value);
+        let value = ConstValue::new(value);
+        self.assign::<Key>(value)
     }
 
     pub const fn get<Key, ValueTy>(&self) -> ValueTy
@@ -148,38 +154,41 @@ impl ConstVars {
         let key = unsafe { core::mem::transmute::<_, u64>(TypeId::of::<Key>()) };
         Self::slice_find(self.0, key)
             .unwrap()
+            .1
             .into_inner::<ValueTy>()
     }
 }
 
-pub struct ConstEnv<const VARS: ConstVars>;
+pub struct ConstEnv<const VARS: ConstVariables>;
 
-impl ConstEnv<{ ConstVars::empty() }> {
+impl ConstEnv<{ ConstVariables::empty() }> {
     pub const fn empty() -> Self {
         Self
     }
 }
 
-impl<const VARS: ConstVars> ConstEnv<VARS> {
+impl<const VARS: ConstVariables> ConstEnv<VARS> {
     pub const fn get<Key: 'static, ValueTy: 'static>(&self) -> ValueTy {
         VARS.get::<Key, ValueTy>()
     }
 
-    pub const fn assign<const VAR: ConstVar>(self) -> ConstEnv<{ VARS.assign(VAR) }> {
+    pub const fn assign<Key: 'static, const VALUE: ConstValue>(
+        self,
+    ) -> ConstEnv<{ VARS.assign::<Key>(VALUE) }> {
         ConstEnv
     }
 
     pub const fn map<Key, Map>(&self) -> ConstEnv<{ VARS.map::<Key, Map>() }>
     where
         Key: 'static,
-        Map: ~const ConstVarMap,
+        Map: ~const ConstMap,
     {
         ConstEnv
     }
 }
 
 #[const_trait]
-pub trait ConstVarMap {
+pub trait ConstMap {
     type Input: 'static;
     type Output: 'static;
     fn map(value: Self::Input) -> Self::Output;

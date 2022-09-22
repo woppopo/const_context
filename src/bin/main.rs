@@ -4,19 +4,13 @@
 #![feature(generic_const_exprs)]
 #![feature(inline_const)]
 
-use const_env::{ConstEnv, ConstVar, ConstVarMap};
+use const_env::{ConstEnv, ConstMap, ConstValue};
 
 struct Name<const NAME: &'static str>;
 
-type Key = Name<"value">;
-
-const fn var(value: u32) -> ConstVar {
-    ConstVar::new::<Key, u32>(value)
-}
-
 struct Add42;
 
-impl const ConstVarMap for Add42 {
+impl const ConstMap for Add42 {
     type Input = u32;
     type Output = u32;
 
@@ -27,13 +21,15 @@ impl const ConstVarMap for Add42 {
 
 fn main() {
     let value = const {
+        type Key = Name<"value">;
+
         let env = ConstEnv::empty();
-        let env = env.assign::<{ var(42) }>();
-        let v1 = env.get::<Name<"value">, u32>();
-        let env = env.assign::<{ var(8) }>();
-        let v2 = env.get::<Name<"value">, u32>();
+        let env = env.assign::<Key, { ConstValue::new(42u32) }>();
+        let v1 = env.get::<Key, u32>();
+        let env = env.assign::<Key, { ConstValue::new(42u32) }>();
+        let v2 = env.get::<Key, u32>();
         let env = env.map::<Key, Add42>();
-        let v3 = env.get::<Name<"value">, u32>();
+        let v3 = env.get::<Key, u32>();
         v1 + v2 + v3
     };
 

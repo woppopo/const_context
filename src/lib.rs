@@ -137,8 +137,7 @@ impl ConstVariables {
     }
 
     pub const fn empty() -> Self {
-        const DUMMY: &'static [ConstVariable] = &[(0, ConstValue::new(0))];
-        Self(DUMMY)
+        Self(&[])
     }
 
     pub const fn assign<Key>(self, value: ConstValue) -> Self

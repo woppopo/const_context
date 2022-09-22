@@ -9,8 +9,6 @@
 #![feature(const_type_id)]
 #![feature(core_intrinsics)]
 #![feature(generic_const_exprs)]
-#![feature(inline_const)]
-#![feature(inline_const_pat)]
 
 use core::any::TypeId;
 use core::intrinsics::{const_allocate, const_deallocate};

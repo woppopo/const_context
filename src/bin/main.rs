@@ -1,7 +1,5 @@
 #![feature(adt_const_params)]
 #![feature(const_trait_impl)]
-#![feature(generic_arg_infer)]
-#![feature(generic_const_exprs)]
 #![feature(inline_const)]
 
 use const_env::{ConstEnv, ConstEnvMap, ConstValue, ConstVarMap, ConstVariables};

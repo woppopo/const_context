@@ -135,10 +135,9 @@ impl ConstVars {
     where
         Key: 'static,
         Map: ~const ConstVarMap,
-        Map::ValueTy: 'static,
     {
-        let value = self.get::<Key, Map::ValueTy>();
-        self.assign(ConstVar::new::<Key, Map::ValueTy>(Map::map(value)))
+        let value = self.get::<Key, Map::Input>();
+        self.assign(ConstVar::new::<Key, Map::Output>(Map::map(value)))
     }
 
     pub const fn get<Key, ValueTy>(&self) -> ValueTy
@@ -174,7 +173,6 @@ impl<const VARS: ConstVars> ConstEnv<VARS> {
     where
         Key: 'static,
         Map: ~const ConstVarMap,
-        Map::ValueTy: 'static,
     {
         ConstEnv
     }
@@ -182,6 +180,7 @@ impl<const VARS: ConstVars> ConstEnv<VARS> {
 
 #[const_trait]
 pub trait ConstVarMap {
-    type ValueTy;
-    fn map(value: Self::ValueTy) -> Self::ValueTy;
+    type Input: 'static;
+    type Output: 'static;
+    fn map(value: Self::Input) -> Self::Output;
 }

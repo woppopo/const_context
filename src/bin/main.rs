@@ -17,9 +17,10 @@ const fn var(value: u32) -> ConstVar {
 struct Add42;
 
 impl const ConstVarMap for Add42 {
-    type ValueTy = u32;
+    type Input = u32;
+    type Output = u32;
 
-    fn map(value: Self::ValueTy) -> Self::ValueTy {
+    fn map(value: Self::Input) -> Self::Output {
         value + 42
     }
 }

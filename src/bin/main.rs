@@ -5,23 +5,21 @@
 
 use const_env::{ConstEnv, ConstVars};
 
-struct Key;
+struct Name<const NAME: &'static str>;
 
-type ValueType = u32;
-
-const fn assign<const VARS: ConstVars, const VALUE: ValueType>(
+const fn assign_u32<const NAME: &'static str, const VALUE: u32, const VARS: ConstVars>(
     _: ConstEnv<VARS>,
-) -> ConstEnv<{ VARS.assign::<Key, _>(VALUE) }> {
+) -> ConstEnv<{ VARS.assign::<Name<NAME>, _>(VALUE) }> {
     ConstEnv
 }
 
 fn main() {
     let value = const {
         let env = ConstEnv::empty();
-        let env = assign::<_, 42>(env);
-        let v1 = env.get::<Key, ValueType>();
-        let env = assign::<_, 8>(env);
-        let v2 = env.get::<Key, ValueType>();
+        let env = assign_u32::<"value", 42, _>(env);
+        let v1 = env.get::<Name<"value">, u32>();
+        let env = assign_u32::<"value", 8, _>(env);
+        let v2 = env.get::<Name<"value">, u32>();
         v1 + v2
     };
 

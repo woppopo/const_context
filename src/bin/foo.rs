@@ -3,57 +3,61 @@
 #![feature(generic_const_exprs)]
 #![feature(inline_const)]
 
-use const_env::{ConstEnv, ConstEnvMap, ConstValue, ConstVarMap, ConstVariables};
+use const_context::{
+    ConstContext, ConstContextMapper, ConstValue, ConstVariableMapper, ConstVariables,
+};
 
 struct Name<const NAME: &'static str>;
 
 struct Add42;
 
-impl const ConstVarMap for Add42 {
+impl const ConstVariableMapper for Add42 {
     type Input = u32;
     type Output = u32;
 
-    fn map_var(value: Self::Input) -> Self::Output {
+    fn map(value: Self::Input) -> Self::Output {
         value + 42
     }
 }
 
-struct MapEnv;
+struct MapContext;
 
-impl const ConstEnvMap for MapEnv {
-    fn map_env(vars: ConstVariables) -> ConstVariables {
+impl const ConstContextMapper for MapContext {
+    fn map(vars: ConstVariables) -> ConstVariables {
         let a = vars.get::<Name<"value1">, u32>();
         let b = vars.get::<Name<"value2">, u32>();
         vars.assign::<Name<"value3">>(ConstValue::new(a * b))
     }
 }
 
-fn _somefunc<const VARS: ConstVariables>(_: ConstEnv<VARS>) -> ConstEnv<{ MapEnv::map_env(VARS) }> {
-    ConstEnv
+fn _somefunc<const VARS: ConstVariables>(
+    _: ConstContext<VARS>,
+) -> ConstContext<{ MapContext::map(VARS) }> {
+    ConstContext
 }
 
 fn main() {
     let value = const {
         type Key = Name<"value">;
 
-        let env = ConstEnv::empty();
-        let env = env.assign::<Key, { ConstValue::new(42u32) }>();
-        let v1 = env.get::<Key, u32>();
-        let env = env.assign::<Key, { ConstValue::new(8u32) }>();
-        let v2 = env.get::<Key, u32>();
-        let env = env.map::<Key, Add42>();
-        let v3 = env.get::<Key, u32>();
+        let ctx = ConstContext::empty();
+        let ctx = ctx.assign::<Key, { ConstValue::new(42u32) }>();
+        let v1 = ctx.get::<Key, u32>();
+        let ctx = ctx.assign::<Key, { ConstValue::new(8u32) }>();
+        let v2 = ctx.get::<Key, u32>();
+        let ctx = ctx.map_var::<Key, Add42>();
+        let v3 = ctx.get::<Key, u32>();
         v1 + v2 + v3
     };
 
     println!("{}", value);
 
     let value = const {
-        let env = ConstEnv::empty();
-        let env = env.assign::<Name<"value1">, { ConstValue::new(6u32) }>();
-        let env = env.assign::<Name<"value2">, { ConstValue::new(7u32) }>();
-        let env = env.map_env::<MapEnv>();
-        env.get::<Name<"value3">, u32>()
+        let ctx = ConstContext::empty();
+        let ctx = ctx.assign::<Name<"value1">, { ConstValue::new(6u32) }>();
+        let ctx = ctx.assign::<Name<"value2">, { ConstValue::new(7u32) }>();
+        let ctx = ctx.map::<MapContext>();
+        ctx.get::<Name<"value3">, u32>()
     };
 
     println!("{}", value);

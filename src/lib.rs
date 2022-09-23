@@ -168,10 +168,10 @@ impl ConstVariables {
     pub const fn map<Key, Map>(self) -> Self
     where
         Key: 'static,
-        Map: ~const ConstVarMap,
+        Map: ~const ConstVariableMapper,
     {
         let value = self.get::<Key, Map::Input>();
-        let value = Map::map_var(value);
+        let value = Map::map(value);
         let value = ConstValue::new(value);
         self.assign::<Key>(value)
     }
@@ -188,15 +188,15 @@ impl ConstVariables {
     }
 }
 
-pub struct ConstEnv<const VARS: ConstVariables>;
+pub struct ConstContext<const VARS: ConstVariables>;
 
-impl ConstEnv<{ ConstVariables::empty() }> {
+impl ConstContext<{ ConstVariables::empty() }> {
     pub const fn empty() -> Self {
         Self
     }
 }
 
-impl<const VARS: ConstVariables> ConstEnv<VARS> {
+impl<const VARS: ConstVariables> ConstContext<VARS> {
     #[must_use]
     pub const fn get<Key: 'static, ValueTy: 'static>(&self) -> ValueTy {
         VARS.get::<Key, ValueTy>()
@@ -205,109 +205,36 @@ impl<const VARS: ConstVariables> ConstEnv<VARS> {
     #[must_use]
     pub const fn assign<Key: 'static, const VALUE: ConstValue>(
         self,
-    ) -> ConstEnv<{ VARS.assign::<Key>(VALUE) }> {
-        ConstEnv
+    ) -> ConstContext<{ VARS.assign::<Key>(VALUE) }> {
+        ConstContext
     }
 
     #[must_use]
-    pub const fn map<Key, Map>(&self) -> ConstEnv<{ VARS.map::<Key, Map>() }>
+    pub const fn map_var<Key, Map>(&self) -> ConstContext<{ VARS.map::<Key, Map>() }>
     where
         Key: 'static,
-        Map: ~const ConstVarMap,
+        Map: ~const ConstVariableMapper,
     {
-        ConstEnv
+        ConstContext
     }
 
     #[must_use]
-    pub const fn map_env<Map>(&self) -> ConstEnv<{ Map::map_env(VARS) }>
+    pub const fn map<Map>(&self) -> ConstContext<{ Map::map(VARS) }>
     where
-        Map: ~const ConstEnvMap,
+        Map: ~const ConstContextMapper,
     {
-        ConstEnv
+        ConstContext
     }
 }
 
 #[const_trait]
-pub trait ConstVarMap {
+pub trait ConstVariableMapper {
     type Input: 'static + Eq;
     type Output: 'static + Eq;
-    fn map_var(value: Self::Input) -> Self::Output;
+    fn map(value: Self::Input) -> Self::Output;
 }
 
 #[const_trait]
-pub trait ConstEnvMap {
-    fn map_env(vars: ConstVariables) -> ConstVariables;
+pub trait ConstContextMapper {
+    fn map(vars: ConstVariables) -> ConstVariables;
 }
-
-/*
-pub trait ConstEnvAbstract {
-    const VARS: ConstVariables;
-
-    type New<const NEW: ConstVariables>: ConstEnvAbstract;
-
-    type Assign<Key, const VALUE: ConstValue>: ConstEnvAbstract = Self::New<{ Self::VARS.assign::<Key>(VALUE) }>
-    where
-        Key: 'static,
-        Self::New<{ Self::VARS.assign::<Key>(VALUE) }>:;
-
-    type Map<Key, Map>: ConstEnvAbstract = Self::New<{ Self::VARS.map::<Key, Map>() }>
-    where
-        Key: 'static,
-        Map: ~const ConstVarMap,
-        Self::New<{ Self::VARS.map::<Key, Map>() }>:;
-
-    type MapEnv<Map>: ConstEnvAbstract = Self::New<{ Map::map_env(Self::VARS) }>
-    where
-        Map: ~const ConstEnvMap,
-        Self::New<{ Map::map_env(Self::VARS) }>:;
-
-    #[must_use]
-    fn assign<Key: 'static, const VALUE: ConstValue>(self) -> Self::Assign<Key, VALUE>
-    where
-        Key: 'static,
-        Self::New<{ Self::VARS.assign::<Key>(VALUE) }>:;
-
-    #[must_use]
-    fn map<Key, Map>(self) -> Self::Map<Key, Map>
-    where
-        Key: 'static,
-        Map: ~const ConstVarMap,
-        Self::New<{ Self::VARS.map::<Key, Map>() }>:;
-
-    #[must_use]
-    fn map_env<Map>(self) -> Self::MapEnv<Map>
-    where
-        Map: ~const ConstEnvMap,
-        Self::New<{ Map::map_env(Self::VARS) }>:;
-}
-
-impl<const VARS: ConstVariables> const ConstEnvAbstract for ConstEnv<VARS> {
-    const VARS: ConstVariables = VARS;
-    type New<const NEW: ConstVariables> = ConstEnv<NEW>;
-
-    fn assign<Key: 'static, const VALUE: ConstValue>(self) -> Self::Assign<Key, VALUE>
-    where
-        Key: 'static,
-        Self::New<{ Self::VARS.assign::<Key>(VALUE) }>:,
-    {
-        ConstEnv
-    }
-
-    fn map<Key, Map>(self) -> Self::Map<Key, Map>
-    where
-        Key: 'static,
-        Map: ~const ConstVarMap,
-        Self::New<{ Self::VARS.map::<Key, Map>() }>:,
-    {
-        ConstEnv
-    }
-
-    fn map_env<Map>(self) -> Self::MapEnv<Map>
-    where
-        Map: ~const ConstEnvMap,
-        Self::New<{ Map::map_env(Self::VARS) }>:,
-    {
-        ConstEnv
-    }
-}
-*/

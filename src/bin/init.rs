@@ -1,7 +1,7 @@
 #![feature(adt_const_params)]
 #![feature(generic_const_exprs)]
 
-use const_env::{ConstEnv, ConstValue, ConstVariables};
+use const_context::{ConstContext, ConstValue, ConstVariables};
 
 mod need_init {
     use super::*;
@@ -30,19 +30,19 @@ mod need_init {
     }
 
     pub fn initialize<const VARS: ConstVariables>(
-        _: ConstEnv<VARS>,
-    ) -> ConstEnv<{ Functions::add_self(VARS) }> {
+        _: ConstContext<VARS>,
+    ) -> ConstContext<{ Functions::add_self(VARS) }> {
         initialize_value();
-        ConstEnv
+        ConstContext
     }
 }
 
 fn main() {
     use need_init::Functions;
 
-    let env = ConstEnv::empty();
-    let env = need_init::initialize(env);
-    let funcs = env.get::<Functions, Functions>();
+    let ctx = ConstContext::empty();
+    let ctx = need_init::initialize(ctx);
+    let funcs = ctx.get::<Functions, Functions>();
 
     println!("{}", funcs.foo());
 }

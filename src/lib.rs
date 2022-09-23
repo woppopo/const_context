@@ -211,8 +211,14 @@ where
     type Value = V;
 }
 
+impl<V: ConstVariable> ConstVariable for &V {
+    type Key = V::Key;
+    type Value = V::Value;
+}
+
 #[const_trait]
 pub trait ConstContextMapper {
+    type Then<M: ConstContextMapper>: ConstContextMapper = (Self, M) where Self: Sized;
     fn map(vars: ConstVariables) -> ConstVariables;
 }
 
@@ -223,6 +229,18 @@ impl<Var: ConstVariable, const VALUE: ConstValue> const ConstContextMapper
 {
     fn map(vars: ConstVariables) -> ConstVariables {
         vars.assign::<Var>(VALUE)
+    }
+}
+
+impl<M1, M2> const ConstContextMapper for (M1, M2)
+where
+    M1: ~const ConstContextMapper,
+    M2: ~const ConstContextMapper,
+{
+    fn map(vars: ConstVariables) -> ConstVariables {
+        let vars = M1::map(vars);
+        let vars = M2::map(vars);
+        vars
     }
 }
 

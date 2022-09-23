@@ -14,23 +14,10 @@
 
 use core::any::TypeId;
 use core::intrinsics::{const_allocate, const_deallocate};
+use core::marker::PhantomData;
 
 const fn eq_typeid(a: TypeId, b: TypeId) -> bool {
     unsafe { core::mem::transmute::<_, u64>(a) == core::mem::transmute::<_, u64>(b) }
-}
-
-pub trait ConstVariable {
-    type Key: 'static;
-    type Value: 'static + Eq;
-}
-
-impl<K, V> ConstVariable for (K, V)
-where
-    K: 'static,
-    V: 'static + Eq,
-{
-    type Key = K;
-    type Value = V;
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -172,17 +159,6 @@ impl ConstVariables {
         ))
     }
 
-    pub const fn map<Var, Map>(self) -> Self
-    where
-        Var: ConstVariable,
-        Map: ~const ConstVariableMapper<Var>,
-    {
-        let value = self.get::<Var>();
-        let value = Map::map(value);
-        let value = ConstValue::new(value);
-        self.assign::<Var>(value)
-    }
-
     pub const fn get<Var>(&self) -> Var::Value
     where
         Var: ConstVariable,
@@ -212,25 +188,6 @@ impl<const VARS: ConstVariables> ConstContext<VARS> {
     }
 
     #[must_use]
-    pub const fn assign<Var, const VALUE: ConstValue>(
-        self,
-    ) -> ConstContext<{ VARS.assign::<Var>(VALUE) }>
-    where
-        Var: ConstVariable,
-    {
-        ConstContext
-    }
-
-    #[must_use]
-    pub const fn map_var<Var, Map>(&self) -> ConstContext<{ VARS.map::<Var, Map>() }>
-    where
-        Var: ConstVariable,
-        Map: ~const ConstVariableMapper<Var>,
-    {
-        ConstContext
-    }
-
-    #[must_use]
     pub const fn map<Map>(&self) -> ConstContext<{ Map::map(VARS) }>
     where
         Map: ~const ConstContextMapper,
@@ -239,12 +196,50 @@ impl<const VARS: ConstVariables> ConstContext<VARS> {
     }
 }
 
-#[const_trait]
-pub trait ConstVariableMapper<Var: ConstVariable> {
-    fn map(value: Var::Value) -> Var::Value;
+pub trait ConstVariable {
+    type Key: 'static;
+    type Value: 'static + Eq;
+    type Assign<const VALUE: ConstValue> = ConstVariableAssign<Self, VALUE> where Self: Sized;
+}
+
+impl<K, V> ConstVariable for (K, V)
+where
+    K: 'static,
+    V: 'static + Eq,
+{
+    type Key = K;
+    type Value = V;
 }
 
 #[const_trait]
 pub trait ConstContextMapper {
     fn map(vars: ConstVariables) -> ConstVariables;
+}
+
+pub struct ConstVariableAssign<Var: ConstVariable, const VALUE: ConstValue>(PhantomData<Var>);
+
+impl<Var: ConstVariable, const VALUE: ConstValue> const ConstContextMapper
+    for ConstVariableAssign<Var, VALUE>
+{
+    fn map(vars: ConstVariables) -> ConstVariables {
+        vars.assign::<Var>(VALUE)
+    }
+}
+
+#[const_trait]
+pub trait ConstVariableMapper {
+    type Var: ConstVariable;
+    fn map(value: <Self::Var as ConstVariable>::Value) -> <Self::Var as ConstVariable>::Value;
+}
+
+impl<M> const ConstContextMapper for M
+where
+    M: ~const ConstVariableMapper,
+{
+    fn map(vars: ConstVariables) -> ConstVariables {
+        let value = vars.get::<M::Var>();
+        let value = Self::map(value);
+        let value = ConstValue::new(value);
+        vars.assign::<M::Var>(value)
+    }
 }

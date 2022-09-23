@@ -29,6 +29,7 @@ impl ConstValue {
     pub const fn new<T>(value: T) -> Self
     where
         T: 'static,
+        T: Eq,
     {
         let bytes = unsafe {
             let ptr = const_allocate(core::mem::size_of::<T>(), core::mem::align_of::<T>());
@@ -228,8 +229,8 @@ impl<const VARS: ConstVariables> ConstEnv<VARS> {
 
 #[const_trait]
 pub trait ConstVarMap {
-    type Input: 'static;
-    type Output: 'static;
+    type Input: 'static + Eq;
+    type Output: 'static + Eq;
     fn map_var(value: Self::Input) -> Self::Output;
 }
 

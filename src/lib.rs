@@ -1,3 +1,4 @@
+#![no_std]
 #![feature(adt_const_params)]
 #![feature(associated_type_defaults)]
 #![feature(const_heap)]
@@ -41,7 +42,7 @@ impl ConstValue {
         }
     }
 
-    const fn into_inner<T>(self) -> T
+    pub const fn into_inner<T>(self) -> T
     where
         T: 'static,
     {

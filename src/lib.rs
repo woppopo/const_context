@@ -19,6 +19,20 @@ const fn eq_typeid(a: TypeId, b: TypeId) -> bool {
     unsafe { core::mem::transmute::<_, u64>(a) == core::mem::transmute::<_, u64>(b) }
 }
 
+pub trait ConstVariable {
+    type Key: 'static;
+    type Value: 'static + Eq;
+}
+
+impl<K, V> ConstVariable for (K, V)
+where
+    K: 'static,
+    V: 'static + Eq,
+{
+    type Key = K;
+    type Value = V;
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ConstValue {
     ty: TypeId,
@@ -53,36 +67,36 @@ impl ConstValue {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-struct ConstVariable {
+struct VarData {
     key: TypeId,
     val: ConstValue,
 }
 
 #[derive(PartialEq, Eq)]
-pub struct ConstVariables(&'static [ConstVariable]);
+pub struct ConstVariables(&'static [VarData]);
 
 impl ConstVariables {
-    const fn slice_allocate(size: usize) -> &'static mut [ConstVariable] {
+    const fn slice_allocate(size: usize) -> &'static mut [VarData] {
         unsafe {
             let ptr = const_allocate(
-                core::mem::size_of::<ConstVariable>() * size,
-                core::mem::align_of::<ConstVariable>(),
+                core::mem::size_of::<VarData>() * size,
+                core::mem::align_of::<VarData>(),
             );
             core::slice::from_raw_parts_mut(ptr.cast(), size)
         }
     }
 
-    const fn slice_deallocate(vars: &'static [ConstVariable]) {
+    const fn slice_deallocate(vars: &'static [VarData]) {
         unsafe {
             const_deallocate(
                 vars.as_ptr().cast_mut().cast(),
-                core::mem::size_of::<ConstVariable>() * vars.len(),
-                core::mem::align_of::<ConstVariable>(),
+                core::mem::size_of::<VarData>() * vars.len(),
+                core::mem::align_of::<VarData>(),
             )
         };
     }
 
-    const fn slice_find(vars: &'static [ConstVariable], key: TypeId) -> Option<ConstVariable> {
+    const fn slice_find(vars: &'static [VarData], key: TypeId) -> Option<VarData> {
         let mut i = 0;
         while i < vars.len() {
             if eq_typeid(vars[i].key, key) {
@@ -93,10 +107,7 @@ impl ConstVariables {
         None
     }
 
-    const fn slice_push(
-        vars: &'static [ConstVariable],
-        var: ConstVariable,
-    ) -> &'static [ConstVariable] {
+    const fn slice_push(vars: &'static [VarData], var: VarData) -> &'static [VarData] {
         let new = Self::slice_allocate(vars.len() + 1);
 
         let mut i = 0;
@@ -115,10 +126,7 @@ impl ConstVariables {
         new
     }
 
-    const fn slice_reassign(
-        vars: &'static [ConstVariable],
-        var: ConstVariable,
-    ) -> &'static [ConstVariable] {
+    const fn slice_reassign(vars: &'static [VarData], var: VarData) -> &'static [VarData] {
         let new = Self::slice_allocate(vars.len());
 
         let mut i = 0;
@@ -137,10 +145,7 @@ impl ConstVariables {
         new
     }
 
-    const fn slice_assign(
-        vars: &'static [ConstVariable],
-        var: ConstVariable,
-    ) -> &'static [ConstVariable] {
+    const fn slice_assign(vars: &'static [VarData], var: VarData) -> &'static [VarData] {
         if Self::slice_find(vars, var.key).is_some() {
             Self::slice_reassign(vars, var)
         } else {
@@ -152,39 +157,40 @@ impl ConstVariables {
         Self(&[])
     }
 
-    pub const fn assign<Key>(self, value: ConstValue) -> Self
+    pub const fn assign<Var>(self, value: ConstValue) -> Self
     where
-        Key: 'static,
+        Var: ConstVariable,
     {
+        assert!(eq_typeid(TypeId::of::<Var::Value>(), value.ty));
+
         Self(Self::slice_assign(
             self.0,
-            ConstVariable {
-                key: TypeId::of::<Key>(),
+            VarData {
+                key: TypeId::of::<Var::Key>(),
                 val: value,
             },
         ))
     }
 
-    pub const fn map<Key, Map>(self) -> Self
+    pub const fn map<Var, Map>(self) -> Self
     where
-        Key: 'static,
-        Map: ~const ConstVariableMapper,
+        Var: ConstVariable,
+        Map: ~const ConstVariableMapper<Var>,
     {
-        let value = self.get::<Key, Map::Input>();
+        let value = self.get::<Var>();
         let value = Map::map(value);
         let value = ConstValue::new(value);
-        self.assign::<Key>(value)
+        self.assign::<Var>(value)
     }
 
-    pub const fn get<Key, ValueTy>(&self) -> ValueTy
+    pub const fn get<Var>(&self) -> Var::Value
     where
-        Key: 'static,
-        ValueTy: 'static,
+        Var: ConstVariable,
     {
-        Self::slice_find(self.0, TypeId::of::<Key>())
+        Self::slice_find(self.0, TypeId::of::<Var::Key>())
             .unwrap()
             .val
-            .into_inner::<ValueTy>()
+            .into_inner::<Var::Value>()
     }
 }
 
@@ -198,22 +204,28 @@ impl ConstContext<{ ConstVariables::empty() }> {
 
 impl<const VARS: ConstVariables> ConstContext<VARS> {
     #[must_use]
-    pub const fn get<Key: 'static, ValueTy: 'static>(&self) -> ValueTy {
-        VARS.get::<Key, ValueTy>()
+    pub const fn get<Var>(&self) -> Var::Value
+    where
+        Var: ConstVariable,
+    {
+        VARS.get::<Var>()
     }
 
     #[must_use]
-    pub const fn assign<Key: 'static, const VALUE: ConstValue>(
+    pub const fn assign<Var, const VALUE: ConstValue>(
         self,
-    ) -> ConstContext<{ VARS.assign::<Key>(VALUE) }> {
+    ) -> ConstContext<{ VARS.assign::<Var>(VALUE) }>
+    where
+        Var: ConstVariable,
+    {
         ConstContext
     }
 
     #[must_use]
-    pub const fn map_var<Key, Map>(&self) -> ConstContext<{ VARS.map::<Key, Map>() }>
+    pub const fn map_var<Var, Map>(&self) -> ConstContext<{ VARS.map::<Var, Map>() }>
     where
-        Key: 'static,
-        Map: ~const ConstVariableMapper,
+        Var: ConstVariable,
+        Map: ~const ConstVariableMapper<Var>,
     {
         ConstContext
     }
@@ -228,10 +240,8 @@ impl<const VARS: ConstVariables> ConstContext<VARS> {
 }
 
 #[const_trait]
-pub trait ConstVariableMapper {
-    type Input: 'static + Eq;
-    type Output: 'static + Eq;
-    fn map(value: Self::Input) -> Self::Output;
+pub trait ConstVariableMapper<Var: ConstVariable> {
+    fn map(value: Var::Value) -> Var::Value;
 }
 
 #[const_trait]

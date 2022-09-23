@@ -21,7 +21,7 @@ mod need_init {
 
     impl Functions {
         pub const fn add_self(vars: ConstVariables) -> ConstVariables {
-            vars.assign::<Self>(ConstValue::new(Self))
+            vars.assign::<(Self, Self)>(ConstValue::new(Self))
         }
 
         pub fn foo(&self) -> u32 {
@@ -42,7 +42,7 @@ fn main() {
 
     let ctx = ConstContext::empty();
     let ctx = need_init::initialize(ctx);
-    let funcs = ctx.get::<Functions, Functions>();
+    let funcs = ctx.get::<(Functions, Functions)>();
 
     println!("{}", funcs.foo());
 }

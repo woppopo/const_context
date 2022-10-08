@@ -190,7 +190,7 @@ impl<const VARS: ConstVariables> ConstContext<VARS> {
     #[must_use]
     pub const fn map<Map>(self) -> ConstContext<{ Map::OUTPUT }>
     where
-        Map: ConstContextMapper<VARS>,
+        Map: ConstContextMap<VARS>,
     {
         ConstContext
     }
@@ -199,7 +199,6 @@ impl<const VARS: ConstVariables> ConstContext<VARS> {
 pub trait ConstVariable {
     type Key: 'static;
     type Value: 'static + Eq;
-    //type Assign<const VALUE: ConstValue> = ConstVariableAssign<Self, VALUE> where Self: Sized;
 }
 
 impl<K, V> ConstVariable for (K, V)
@@ -216,23 +215,23 @@ impl<V: ConstVariable> ConstVariable for &V {
     type Value = V::Value;
 }
 
-pub trait ConstContextMapper<const INPUT: ConstVariables> {
+pub trait ConstContextMap<const INPUT: ConstVariables> {
     const OUTPUT: ConstVariables;
-    type Then<M: ConstContextMapper<{ Self::OUTPUT }>>: ConstContextMapper<INPUT> = (Self, M) where Self: Sized;
+    type Then<M: ConstContextMap<{ Self::OUTPUT }>>: ConstContextMap<INPUT> = (Self, M) where Self: Sized;
 }
 
 pub struct ConstVariableAssign<Var: ConstVariable, const VALUE: ConstValue>(PhantomData<Var>);
 
 impl<Var: ConstVariable, const VALUE: ConstValue, const INPUT: ConstVariables>
-    ConstContextMapper<INPUT> for ConstVariableAssign<Var, VALUE>
+    ConstContextMap<INPUT> for ConstVariableAssign<Var, VALUE>
 {
     const OUTPUT: ConstVariables = INPUT.assign::<Var>(VALUE);
 }
 
-impl<M1, M2, const INPUT: ConstVariables> ConstContextMapper<INPUT> for (M1, M2)
+impl<M1, M2, const INPUT: ConstVariables> ConstContextMap<INPUT> for (M1, M2)
 where
-    M1: ConstContextMapper<INPUT>,
-    M2: ConstContextMapper<{ M1::OUTPUT }>,
+    M1: ConstContextMap<INPUT>,
+    M2: ConstContextMap<{ M1::OUTPUT }>,
 {
     const OUTPUT: ConstVariables = M2::OUTPUT;
 }

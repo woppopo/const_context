@@ -6,7 +6,7 @@
 use core::marker::PhantomData;
 
 use const_context::{
-    ConstContext, ConstContextMapper, ConstValue, ConstVariable, ConstVariableAssign as Assign,
+    ConstContext, ConstContextMap, ConstValue, ConstVariable, ConstVariableAssign as Assign,
     ConstVariables,
 };
 
@@ -17,7 +17,7 @@ type Var3 = (Name<"value3">, u32);
 
 struct Add42<Key>(PhantomData<Key>);
 
-impl<Key: 'static, const INPUT: ConstVariables> ConstContextMapper<INPUT> for Add42<Key> {
+impl<Key: 'static, const INPUT: ConstVariables> ConstContextMap<INPUT> for Add42<Key> {
     const OUTPUT: ConstVariables = {
         let value = INPUT.get::<(Key, u32)>();
         INPUT.assign::<(Key, u32)>(ConstValue::new(value + 42))
@@ -26,7 +26,7 @@ impl<Key: 'static, const INPUT: ConstVariables> ConstContextMapper<INPUT> for Ad
 
 struct MapContext;
 
-impl<const INPUT: ConstVariables> ConstContextMapper<INPUT> for MapContext {
+impl<const INPUT: ConstVariables> ConstContextMap<INPUT> for MapContext {
     const OUTPUT: ConstVariables = {
         let a = INPUT.get::<Var1>();
         let b = INPUT.get::<Var2>();

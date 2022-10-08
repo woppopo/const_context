@@ -188,7 +188,7 @@ impl<const VARS: ConstVariables> ConstContext<VARS> {
     }
 
     #[must_use]
-    pub const fn map<Map>(&self) -> ConstContext<{ Map::OUTPUT }>
+    pub const fn map<Map>(self) -> ConstContext<{ Map::OUTPUT }>
     where
         Map: ConstContextMapper<VARS>,
     {

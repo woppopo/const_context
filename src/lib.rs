@@ -188,9 +188,9 @@ impl<const VARS: ConstVariables> ConstContext<VARS> {
     }
 
     #[must_use]
-    pub const fn map<Map>(&self) -> ConstContext<{ Map::map(VARS) }>
+    pub const fn map<Map>(&self) -> ConstContext<{ Map::OUTPUT }>
     where
-        Map: ~const ConstContextMapper,
+        Map: ConstContextMapper<VARS>,
     {
         ConstContext
     }
@@ -199,7 +199,7 @@ impl<const VARS: ConstVariables> ConstContext<VARS> {
 pub trait ConstVariable {
     type Key: 'static;
     type Value: 'static + Eq;
-    type Assign<const VALUE: ConstValue> = ConstVariableAssign<Self, VALUE> where Self: Sized;
+    //type Assign<const VALUE: ConstValue> = ConstVariableAssign<Self, VALUE> where Self: Sized;
 }
 
 impl<K, V> ConstVariable for (K, V)
@@ -216,48 +216,23 @@ impl<V: ConstVariable> ConstVariable for &V {
     type Value = V::Value;
 }
 
-#[const_trait]
-pub trait ConstContextMapper {
-    type Then<M: ConstContextMapper>: ConstContextMapper = (Self, M) where Self: Sized;
-    fn map(vars: ConstVariables) -> ConstVariables;
+pub trait ConstContextMapper<const INPUT: ConstVariables> {
+    const OUTPUT: ConstVariables;
+    type Then<M: ConstContextMapper<{ Self::OUTPUT }>>: ConstContextMapper<INPUT> = (Self, M) where Self: Sized;
 }
 
 pub struct ConstVariableAssign<Var: ConstVariable, const VALUE: ConstValue>(PhantomData<Var>);
 
-impl<Var: ConstVariable, const VALUE: ConstValue> const ConstContextMapper
-    for ConstVariableAssign<Var, VALUE>
+impl<Var: ConstVariable, const VALUE: ConstValue, const INPUT: ConstVariables>
+    ConstContextMapper<INPUT> for ConstVariableAssign<Var, VALUE>
 {
-    fn map(vars: ConstVariables) -> ConstVariables {
-        vars.assign::<Var>(VALUE)
-    }
+    const OUTPUT: ConstVariables = INPUT.assign::<Var>(VALUE);
 }
 
-impl<M1, M2> const ConstContextMapper for (M1, M2)
+impl<M1, M2, const INPUT: ConstVariables> ConstContextMapper<INPUT> for (M1, M2)
 where
-    M1: ~const ConstContextMapper,
-    M2: ~const ConstContextMapper,
+    M1: ConstContextMapper<INPUT>,
+    M2: ConstContextMapper<{ M1::OUTPUT }>,
 {
-    fn map(vars: ConstVariables) -> ConstVariables {
-        let vars = M1::map(vars);
-        let vars = M2::map(vars);
-        vars
-    }
-}
-
-#[const_trait]
-pub trait ConstVariableMapper {
-    type Var: ConstVariable;
-    fn map(value: <Self::Var as ConstVariable>::Value) -> <Self::Var as ConstVariable>::Value;
-}
-
-impl<M> const ConstContextMapper for M
-where
-    M: ~const ConstVariableMapper,
-{
-    fn map(vars: ConstVariables) -> ConstVariables {
-        let value = vars.get::<M::Var>();
-        let value = Self::map(value);
-        let value = ConstValue::new(value);
-        vars.assign::<M::Var>(value)
-    }
+    const OUTPUT: ConstVariables = M2::OUTPUT;
 }

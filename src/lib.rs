@@ -1,4 +1,4 @@
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 #![feature(adt_const_params)]
 #![feature(associated_type_defaults)]
 #![feature(const_heap)]
@@ -7,10 +7,10 @@
 #![feature(const_ptr_read)]
 #![feature(const_ptr_write)]
 #![feature(const_slice_from_raw_parts_mut)]
-#![feature(const_trait_impl)]
 #![feature(const_type_id)]
 #![feature(core_intrinsics)]
 #![feature(generic_const_exprs)]
+#![feature(type_alias_impl_trait)]
 
 use core::any::TypeId;
 use core::intrinsics::{const_allocate, const_deallocate};
@@ -217,8 +217,9 @@ impl<V: ConstVariable> ConstVariable for &V {
 
 pub trait ConstContextMap<const INPUT: ConstVariables> {
     const OUTPUT: ConstVariables;
-    type Then<M: ConstContextMap<{ Self::OUTPUT }>>: ConstContextMap<INPUT> = (Self, M) where Self: Sized;
 }
+
+pub struct ConstVariableGet<Var: ConstVariable>(PhantomData<Var>);
 
 pub struct ConstVariableAssign<Var: ConstVariable, const VALUE: ConstValue>(PhantomData<Var>);
 
@@ -228,10 +229,72 @@ impl<Var: ConstVariable, const VALUE: ConstValue, const INPUT: ConstVariables>
     const OUTPUT: ConstVariables = INPUT.assign::<Var>(VALUE);
 }
 
-impl<M1, M2, const INPUT: ConstVariables> ConstContextMap<INPUT> for (M1, M2)
-where
-    M1: ConstContextMap<INPUT>,
-    M2: ConstContextMap<{ M1::OUTPUT }>,
-{
-    const OUTPUT: ConstVariables = M2::OUTPUT;
+/*
+trait Action<const INPUT: ConstVariables> {
+    type Output;
+    fn eval(self) -> Self::Output;
 }
+
+impl<const INPUT: ConstVariables> Action<INPUT> for () {
+    type Output = ();
+    fn eval(self) -> Self::Output {}
+}
+
+impl<const INPUT: ConstVariables, F, T> Action<INPUT> for F
+where
+    F: FnOnce() -> T,
+{
+    type Output = T;
+    fn eval(self) -> Self::Output {
+        self()
+    }
+}
+
+impl<const INPUT: ConstVariables, Var: ConstVariable, const VALUE: ConstValue, F, Next>
+    Action<INPUT> for (PhantomData<ConstVariableAssign<Var, VALUE>>, F)
+where
+    F: FnOnce() -> Next,
+    Next: Action<{ <ConstVariableAssign<Var, VALUE> as ConstContextMap<INPUT>>::OUTPUT }>,
+{
+    type Output = Next::Output;
+    fn eval(self) -> Self::Output {
+        let next = (self.1)();
+        next.eval()
+    }
+}
+
+impl<const INPUT: ConstVariables, Var: ConstVariable, F, Next> Action<INPUT>
+    for (PhantomData<ConstVariableGet<Var>>, F)
+where
+    F: FnOnce(Var::Value) -> Next,
+    Next: Action<INPUT>,
+{
+    type Output = Next::Output;
+    fn eval(self) -> Self::Output {
+        let next = (self.1)(INPUT.get::<Var>());
+        next.eval()
+    }
+}
+
+macro_rules! ctx {
+    (pure $e:expr) => { move || { $e } };
+    ($var:ty) => { (PhantomData::<ConstVariableGet<$var>>, move |var| move || var) };
+    (let $v:ident = $e:expr; $($rem:tt)*) => {{ let $v = $e; ctx!($($rem)*) }};
+    ($var:ty = $e:expr; $($rem:tt)*) => { (PhantomData::<ConstVariableAssign<$var, { ConstValue::new($e as <$var as ConstVariable>::Value) }>>, move || { ctx!($($rem)*) }) };
+    ($v:ident <= $var:ty; $($rem:tt)* ) => { (PhantomData::<ConstVariableGet<$var>>, move |$v| { ctx!($($rem)*) }) };
+}
+
+#[test]
+#[cfg(test)]
+fn test() {
+    type Var1 = ((), u32);
+    type Var2 = (u32, u32);
+    type A = impl Action<{ ConstVariables::empty() }, Output = u32>;
+    let action: A = ctx! {
+        Var1 = 90;
+        Var1
+    };
+
+    assert_eq!(action.eval(), 90);
+}
+*/

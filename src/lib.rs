@@ -9,6 +9,7 @@
 #![feature(const_slice_from_raw_parts_mut)]
 #![feature(const_type_id)]
 #![feature(core_intrinsics)]
+#![feature(decl_macro)]
 #![feature(generic_const_exprs)]
 #![feature(type_alias_impl_trait)]
 
@@ -16,8 +17,41 @@ use core::any::TypeId;
 use core::intrinsics::{const_allocate, const_deallocate};
 use core::marker::PhantomData;
 
+macro const_for($i:ident in ($s:expr, $e:expr) $b:block) {{
+    let mut $i = $s;
+    while $i < $e {
+        $b;
+        $i += 1;
+    }
+}}
+
 const fn eq_typeid(a: TypeId, b: TypeId) -> bool {
     unsafe { core::mem::transmute::<_, u64>(a) == core::mem::transmute::<_, u64>(b) }
+}
+
+const fn slice_allocate<T>(size: usize) -> &'static mut [T] {
+    unsafe {
+        let ptr = const_allocate(core::mem::size_of::<T>() * size, core::mem::align_of::<T>());
+        core::slice::from_raw_parts_mut(ptr.cast(), size)
+    }
+}
+
+const fn slice_deallocate<T>(vars: &'static [T]) {
+    unsafe {
+        const_deallocate(
+            vars.as_ptr().cast_mut().cast(),
+            core::mem::size_of::<T>() * vars.len(),
+            core::mem::align_of::<T>(),
+        )
+    };
+}
+
+const fn into_bytes<T>(value: T) -> &'static mut [u8] {
+    unsafe {
+        let ptr = const_allocate(core::mem::size_of::<T>(), core::mem::align_of::<T>());
+        core::ptr::write(ptr.cast(), value);
+        core::slice::from_raw_parts_mut(ptr.cast(), core::mem::size_of::<T>())
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -32,15 +66,9 @@ impl ConstValue {
         T: 'static,
         T: Eq,
     {
-        let bytes = unsafe {
-            let ptr = const_allocate(core::mem::size_of::<T>(), core::mem::align_of::<T>());
-            core::ptr::write(ptr.cast(), value);
-            core::slice::from_raw_parts_mut(ptr.cast(), core::mem::size_of::<T>())
-        };
-
         Self {
             ty: TypeId::of::<T>(),
-            bytes,
+            bytes: into_bytes(value),
         }
     }
 
@@ -54,94 +82,59 @@ impl ConstValue {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-struct VarData {
+struct VarEntry {
     key: TypeId,
     val: ConstValue,
 }
 
 #[derive(PartialEq, Eq)]
-pub struct ConstVariables(&'static [VarData]);
+pub struct ConstVariables(&'static [VarEntry]);
 
 impl ConstVariables {
-    const fn slice_allocate(size: usize) -> &'static mut [VarData] {
-        unsafe {
-            let ptr = const_allocate(
-                core::mem::size_of::<VarData>() * size,
-                core::mem::align_of::<VarData>(),
-            );
-            core::slice::from_raw_parts_mut(ptr.cast(), size)
-        }
+    pub const fn empty() -> Self {
+        Self(&[])
     }
 
-    const fn slice_deallocate(vars: &'static [VarData]) {
-        unsafe {
-            const_deallocate(
-                vars.as_ptr().cast_mut().cast(),
-                core::mem::size_of::<VarData>() * vars.len(),
-                core::mem::align_of::<VarData>(),
-            )
-        };
-    }
-
-    const fn slice_find(vars: &'static [VarData], key: TypeId) -> Option<VarData> {
-        let mut i = 0;
-        while i < vars.len() {
+    const fn find(vars: &'static [VarEntry], key: TypeId) -> Option<VarEntry> {
+        const_for!(i in (0, vars.len()) {
             if eq_typeid(vars[i].key, key) {
                 return Some(vars[i]);
             }
-            i += 1;
-        }
+        });
         None
     }
 
-    const fn slice_push(vars: &'static [VarData], var: VarData) -> &'static [VarData] {
-        let new = Self::slice_allocate(vars.len() + 1);
+    const fn push(vars: &'static [VarEntry], var: VarEntry) -> &'static [VarEntry] {
+        let new = slice_allocate(vars.len() + 1);
 
-        let mut i = 0;
-        while i < vars.len() {
+        const_for!(i in (0, vars.len()) {
             if eq_typeid(vars[i].key, var.key) {
                 panic!("")
             }
 
             new[i] = vars[i];
-            i += 1;
-        }
+        });
 
-        Self::slice_deallocate(vars);
+        slice_deallocate(vars);
 
-        new[i] = var;
+        new[vars.len()] = var;
         new
     }
 
-    const fn slice_reassign(vars: &'static [VarData], var: VarData) -> &'static [VarData] {
-        let new = Self::slice_allocate(vars.len());
+    const fn reassign(vars: &'static [VarEntry], var: VarEntry) -> &'static [VarEntry] {
+        let new = slice_allocate(vars.len());
 
-        let mut i = 0;
-        while i < vars.len() {
+        const_for!(i in (0, vars.len()) {
             if eq_typeid(vars[i].key, var.key) {
                 new[i] = var;
             } else {
                 new[i] = vars[i];
             }
+        });
 
-            i += 1;
-        }
-
-        Self::slice_deallocate(vars);
+        slice_deallocate(vars);
 
         new
-    }
-
-    const fn slice_assign(vars: &'static [VarData], var: VarData) -> &'static [VarData] {
-        if Self::slice_find(vars, var.key).is_some() {
-            Self::slice_reassign(vars, var)
-        } else {
-            Self::slice_push(vars, var)
-        }
-    }
-
-    pub const fn empty() -> Self {
-        Self(&[])
     }
 
     pub const fn assign<Var>(self, value: ConstValue) -> Self
@@ -150,20 +143,23 @@ impl ConstVariables {
     {
         assert!(eq_typeid(TypeId::of::<Var::Value>(), value.ty));
 
-        Self(Self::slice_assign(
-            self.0,
-            VarData {
-                key: TypeId::of::<Var::Key>(),
-                val: value,
-            },
-        ))
+        let vars = self.0;
+        let var = VarEntry {
+            key: TypeId::of::<Var::Key>(),
+            val: value,
+        };
+
+        Self(match Self::find(vars, var.key) {
+            Some(_) => Self::reassign(vars, var),
+            None => Self::push(vars, var),
+        })
     }
 
     pub const fn get<Var>(&self) -> Var::Value
     where
         Var: ConstVariable,
     {
-        Self::slice_find(self.0, TypeId::of::<Var::Key>())
+        Self::find(self.0, TypeId::of::<Var::Key>())
             .unwrap()
             .val
             .into_inner::<Var::Value>()

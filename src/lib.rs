@@ -254,10 +254,10 @@ macro_rules! ctx {
         (PhantomData::<__Assign>, move || { ctx! { $($rem)* } })
     }};
     ($func:ident($($arg:expr)*); $($rem:tt)* ) => {{
-        (|ctx| $func(ctx, $($arg)*), move |_| { ctx!($($rem)*) })
+        (move |ctx| $func(ctx, $($arg)*), move |_| { ctx!($($rem)*) })
     }};
     ($var:ident <= $func:ident($($arg:expr)*); $($rem:tt)* ) => {{
-        (|ctx| $func(ctx, $($arg)*), move |$var| { ctx!($($rem)*) })
+        (move |ctx| $func(ctx, $($arg)*), move |$var| { ctx!($($rem)*) })
     }};
     ($var:ident <= $cvar:ty; $($rem:tt)* ) => {{
         type __Get = ConstVariableGet<$cvar>;

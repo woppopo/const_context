@@ -9,6 +9,7 @@
 #![feature(const_slice_from_raw_parts_mut)]
 #![feature(const_type_id)]
 #![feature(core_intrinsics)]
+#![feature(inherent_associated_types)]
 
 use core::any::TypeId;
 use core::intrinsics::const_allocate;
@@ -77,13 +78,6 @@ where
     };
 }
 
-pub trait Push: Sized {
-    type Pushed<Key, const VALUE: ConstValue> = VarList<Key, VALUE, Self>;
-}
-
-impl Push for VarListEnd {}
-impl<Key, const VAL: ConstValue, Next> Push for VarList<Key, VAL, Next> {}
-
 pub trait ConstVariable {
     type Key: 'static;
     type Value: 'static + Eq;
@@ -112,6 +106,9 @@ impl ConstContext<VarListEnd> {
 }
 
 impl<Vars> ConstContext<Vars> {
+    type Push<Var: ConstVariable, const VAL: ConstValue> =
+        ConstContext<VarList<Var::Key, VAL, Vars>>;
+
     pub const fn into<NextVars>(self) -> ConstContext<NextVars> {
         ConstContext(PhantomData)
     }
@@ -288,7 +285,7 @@ fn test() {
     };
 
     let action3 = ctx! {
-        Var1 = 90; // compiler cannot infer VARS yet?
+        Var1 = 90;
         v <= f();
         w <= Var1;
         pure (v + w)

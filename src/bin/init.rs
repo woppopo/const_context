@@ -1,9 +1,10 @@
 #![feature(adt_const_params)]
 #![feature(generic_const_exprs)]
 
-use const_context::{ConstContext, ConstValue, ConstVariable, ConstVariables};
+use const_context::{ConstContext, ConstContextPush, ConstValue, ConstVariable};
 
 mod need_init {
+
     use super::*;
 
     static mut VALUE: Option<u32> = None;
@@ -20,10 +21,6 @@ mod need_init {
     pub struct Functions;
 
     impl Functions {
-        pub const fn add_self(vars: ConstVariables) -> ConstVariables {
-            vars.assign::<Self>(ConstValue::new(Self))
-        }
-
         pub fn foo(&self) -> u32 {
             get_value()
         }
@@ -34,11 +31,12 @@ mod need_init {
         type Value = Self;
     }
 
-    pub fn initialize<const VARS: ConstVariables>(
-        _: ConstContext<VARS>,
-    ) -> ConstContext<{ Functions::add_self(VARS) }> {
+    pub fn initialize<Vars>(
+        ctx: ConstContext<Vars>,
+    ) -> <ConstContext<Vars> as ConstContextPush<Functions, { ConstValue::new(Functions) }>>::Output
+    {
         initialize_value();
-        ConstContext
+        ctx.into()
     }
 }
 

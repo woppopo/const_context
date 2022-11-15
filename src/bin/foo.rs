@@ -3,11 +3,8 @@
 #![feature(generic_const_exprs)]
 #![feature(inline_const)]
 
-use core::marker::PhantomData;
-
 use const_context::{
-    ConstContext, ConstContextMap, ConstValue, ConstVariable, ConstVariableAssign as Assign,
-    ConstVariables,
+    ConstContext, ConstContextGet, ConstContextPush, ConstValue, ConstVariable, Search,
 };
 
 struct Name<const NAME: &'static str>;
@@ -15,45 +12,33 @@ type Var1 = (Name<"value1">, u32);
 type Var2 = (Name<"value2">, u32);
 type Var3 = (Name<"value3">, u32);
 
-struct Add42<Key>(PhantomData<Key>);
+type Push<Vars, Var, const VAL: ConstValue> =
+    <ConstContext<Vars> as ConstContextPush<Var, VAL>>::Output;
 
-impl<Key: 'static, const INPUT: ConstVariables> ConstContextMap<INPUT> for Add42<Key> {
-    const OUTPUT: ConstVariables = {
-        let value = INPUT.get::<(Key, u32)>();
-        INPUT.assign::<(Key, u32)>(ConstValue::new(value + 42))
-    };
-}
-
-struct MapContext;
-
-impl<const INPUT: ConstVariables> ConstContextMap<INPUT> for MapContext {
-    const OUTPUT: ConstVariables = {
-        let a = INPUT.get::<Var1>();
-        let b = INPUT.get::<Var2>();
-        INPUT.assign::<Var3>(ConstValue::new(a * b))
-    };
+const fn add42<Key, Vars>(
+    ctx: ConstContext<Vars>,
+) -> Push<
+    Vars,
+    (Key, u32),
+    { ConstValue::new(ConstContext::<Vars>::get_from_type::<(Key, u32)>() + 42) },
+>
+where
+    Key: 'static,
+    Vars: Search<Key>,
+{
+    ctx.into()
 }
 
 fn main() {
     let value = const {
         let ctx = ConstContext::empty();
-        let ctx = ctx.map::<Assign<Var1, { ConstValue::new(42u32) }>>();
+        let ctx = ctx.push::<Var1, { ConstValue::new(42u32) }>();
         let v1 = ctx.get::<Var1>();
-        let ctx = ctx.map::<Assign<Var1, { ConstValue::new(8u32) }>>();
+        let ctx = ctx.push::<Var1, { ConstValue::new(8u32) }>();
         let v2 = ctx.get::<Var1>();
-        let ctx = ctx.map::<Add42<<Var1 as ConstVariable>::Key>>();
+        let ctx = add42::<<Var1 as ConstVariable>::Key, _>(ctx);
         let v3 = ctx.get::<Var1>();
         v1 + v2 + v3
-    };
-
-    println!("{}", value);
-
-    let value = const {
-        let ctx = ConstContext::empty();
-        let ctx = ctx.map::<Assign<Var1, { ConstValue::new(6u32) }>>();
-        let ctx = ctx.map::<Assign<Var2, { ConstValue::new(7u32) }>>();
-        let ctx = ctx.map::<MapContext>();
-        ctx.get::<Var3>()
     };
 
     println!("{}", value);

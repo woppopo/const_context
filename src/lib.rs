@@ -11,39 +11,15 @@
 #![feature(core_intrinsics)]
 #![feature(decl_macro)]
 #![feature(generic_const_exprs)]
+#![feature(inline_const)]
 #![feature(type_alias_impl_trait)]
 
 use core::any::TypeId;
-use core::intrinsics::{const_allocate, const_deallocate};
+use core::intrinsics::const_allocate;
 use core::marker::PhantomData;
-
-macro const_for($i:ident in ($s:expr, $e:expr) $b:block) {{
-    let mut $i = $s;
-    while $i < $e {
-        $b;
-        $i += 1;
-    }
-}}
 
 const fn eq_typeid(a: TypeId, b: TypeId) -> bool {
     unsafe { core::mem::transmute::<_, u64>(a) == core::mem::transmute::<_, u64>(b) }
-}
-
-const fn slice_allocate<T>(size: usize) -> &'static mut [T] {
-    unsafe {
-        let ptr = const_allocate(core::mem::size_of::<T>() * size, core::mem::align_of::<T>());
-        core::slice::from_raw_parts_mut(ptr.cast(), size)
-    }
-}
-
-const fn slice_deallocate<T>(vars: &'static [T]) {
-    unsafe {
-        const_deallocate(
-            vars.as_ptr().cast_mut().cast(),
-            core::mem::size_of::<T>() * vars.len(),
-            core::mem::align_of::<T>(),
-        )
-    };
 }
 
 const fn into_bytes<T>(value: T) -> &'static mut [u8] {
@@ -81,116 +57,36 @@ impl ConstValue {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-struct VarEntry {
-    key: TypeId,
-    val: ConstValue,
+pub struct VarListEnd;
+
+pub struct VarList<Key, const VAL: ConstValue, Next>(PhantomData<(Key, Next)>);
+
+pub trait Search<Key> {
+    const FOUND: Option<ConstValue>;
 }
 
-#[derive(PartialEq, Eq)]
-pub struct ConstVariables(&'static [VarEntry]);
-
-impl ConstVariables {
-    pub const fn empty() -> Self {
-        Self(&[])
-    }
-
-    const fn find(vars: &'static [VarEntry], key: TypeId) -> Option<VarEntry> {
-        const_for!(i in (0, vars.len()) {
-            if eq_typeid(vars[i].key, key) {
-                return Some(vars[i]);
-            }
-        });
-        None
-    }
-
-    const fn push(vars: &'static [VarEntry], var: VarEntry) -> &'static [VarEntry] {
-        let new = slice_allocate(vars.len() + 1);
-
-        const_for!(i in (0, vars.len()) {
-            if eq_typeid(vars[i].key, var.key) {
-                panic!("")
-            }
-
-            new[i] = vars[i];
-        });
-
-        slice_deallocate(vars);
-
-        new[vars.len()] = var;
-        new
-    }
-
-    const fn reassign(vars: &'static [VarEntry], var: VarEntry) -> &'static [VarEntry] {
-        let new = slice_allocate(vars.len());
-
-        const_for!(i in (0, vars.len()) {
-            if eq_typeid(vars[i].key, var.key) {
-                new[i] = var;
-            } else {
-                new[i] = vars[i];
-            }
-        });
-
-        slice_deallocate(vars);
-
-        new
-    }
-
-    pub const fn assign<Var>(self, value: ConstValue) -> Self
-    where
-        Var: ConstVariable,
-    {
-        assert!(eq_typeid(TypeId::of::<Var::Value>(), value.ty));
-
-        let vars = self.0;
-        let var = VarEntry {
-            key: TypeId::of::<Var::Key>(),
-            val: value,
-        };
-
-        Self(match Self::find(vars, var.key) {
-            Some(_) => Self::reassign(vars, var),
-            None => Self::push(vars, var),
-        })
-    }
-
-    pub const fn get<Var>(&self) -> Var::Value
-    where
-        Var: ConstVariable,
-    {
-        Self::find(self.0, TypeId::of::<Var::Key>())
-            .unwrap()
-            .val
-            .into_inner::<Var::Value>()
-    }
+impl<Key> Search<Key> for VarListEnd {
+    const FOUND: Option<ConstValue> = None;
 }
 
-pub struct ConstContext<const VARS: ConstVariables>;
-
-impl ConstContext<{ ConstVariables::empty() }> {
-    pub const fn empty() -> Self {
-        Self
-    }
+impl<Key, Hold, const VAL: ConstValue, Next: Search<Key>> Search<Key> for VarList<Hold, VAL, Next>
+where
+    Key: 'static,
+    Hold: 'static,
+{
+    const FOUND: Option<ConstValue> = if eq_typeid(TypeId::of::<Key>(), TypeId::of::<Hold>()) {
+        Some(VAL)
+    } else {
+        Next::FOUND
+    };
 }
 
-impl<const VARS: ConstVariables> ConstContext<VARS> {
-    #[must_use]
-    pub const fn get<Var>(&self) -> Var::Value
-    where
-        Var: ConstVariable,
-    {
-        VARS.get::<Var>()
-    }
-
-    #[must_use]
-    pub const fn map<Map>(self) -> ConstContext<{ Map::OUTPUT }>
-    where
-        Map: ConstContextMap<VARS>,
-    {
-        ConstContext
-    }
+pub trait Push: Sized {
+    type Pushed<Key, const VALUE: ConstValue> = VarList<Key, VALUE, Self>;
 }
+
+impl Push for VarListEnd {}
+impl<Key, const VAL: ConstValue, Next> Push for VarList<Key, VAL, Next> {}
 
 pub trait ConstVariable {
     type Key: 'static;
@@ -211,31 +107,85 @@ impl<V: ConstVariable> ConstVariable for &V {
     type Value = V::Value;
 }
 
-pub trait ConstContextMap<const INPUT: ConstVariables> {
-    const OUTPUT: ConstVariables;
+pub struct ConstContext<Vars>(PhantomData<Vars>);
+
+impl ConstContext<VarListEnd> {
+    pub const fn empty() -> Self {
+        Self(PhantomData)
+    }
 }
 
-pub struct ConstVariableGet<Var: ConstVariable>(PhantomData<Var>);
+impl<Vars> ConstContext<Vars> {
+    pub const fn into<NextVars>(self) -> ConstContext<NextVars> {
+        ConstContext(PhantomData)
+    }
 
-pub struct ConstVariableAssign<Var: ConstVariable, const VALUE: ConstValue>(PhantomData<Var>);
+    pub const fn get_from_type<Var>() -> Var::Value
+    where
+        Var: ConstVariable,
+        Vars: Search<Var::Key>,
+    {
+        <Self as ConstContextGet<Var>>::OUTPUT
+    }
 
-impl<Var: ConstVariable, const VALUE: ConstValue, const INPUT: ConstVariables>
-    ConstContextMap<INPUT> for ConstVariableAssign<Var, VALUE>
+    pub const fn get<Var>(&self) -> Var::Value
+    where
+        Var: ConstVariable,
+        Vars: Search<Var::Key>,
+    {
+        <Self as ConstContextGet<Var>>::OUTPUT
+    }
+
+    pub const fn push<Var, const VAL: ConstValue>(
+        self,
+    ) -> <ConstContext<Vars> as ConstContextPush<Var, VAL>>::Output
+    where
+        Var: ConstVariable,
+    {
+        self.into()
+    }
+}
+
+pub trait ConstContextGet<Var>
+where
+    Var: ConstVariable,
 {
-    const OUTPUT: ConstVariables = INPUT.assign::<Var>(VALUE);
+    const OUTPUT: Var::Value;
 }
 
-pub trait Action<const INPUT: ConstVariables> {
+impl<Vars, Var> ConstContextGet<Var> for ConstContext<Vars>
+where
+    Var: ConstVariable,
+    Vars: Search<Var::Key>,
+{
+    const OUTPUT: Var::Value = Vars::FOUND.unwrap().into_inner();
+}
+
+pub trait ConstContextPush<Var, const VAL: ConstValue>
+where
+    Var: ConstVariable,
+{
+    type Output;
+}
+
+impl<Vars, Var, const VAL: ConstValue> ConstContextPush<Var, VAL> for ConstContext<Vars>
+where
+    Var: ConstVariable,
+{
+    type Output = ConstContext<VarList<Var::Key, VAL, Vars>>;
+}
+
+pub trait Action<Vars> {
     type Output;
     fn eval(self) -> Self::Output;
 }
 
-impl<const INPUT: ConstVariables> Action<INPUT> for () {
+impl<Input> Action<Input> for () {
     type Output = ();
     fn eval(self) -> Self::Output {}
 }
 
-impl<const INPUT: ConstVariables, F, T> Action<INPUT> for F
+impl<Input, F, T> Action<Input> for F
 where
     F: FnOnce() -> T,
 {
@@ -245,26 +195,28 @@ where
     }
 }
 
-impl<const INPUT: ConstVariables, const OUTPUT: ConstVariables, F, T, C, Next> Action<INPUT>
-    for (F, C)
+impl<Input, Output, F, T, C, Next> Action<Input> for (F, C)
 where
-    F: FnOnce(ConstContext<INPUT>) -> (ConstContext<OUTPUT>, T),
+    F: FnOnce(ConstContext<Input>) -> (ConstContext<Output>, T),
     C: FnOnce(T) -> Next,
-    Next: Action<OUTPUT>,
+    Next: Action<Output>,
 {
     type Output = Next::Output;
     fn eval(self) -> Self::Output {
-        let (_, arg) = self.0(ConstContext);
+        let (_, arg) = self.0(ConstContext(PhantomData));
         let next = self.1(arg);
         next.eval()
     }
 }
 
-impl<const INPUT: ConstVariables, Var: ConstVariable, const VALUE: ConstValue, F, Next>
-    Action<INPUT> for (PhantomData<ConstVariableAssign<Var, VALUE>>, F)
+pub struct ConstVariableGet<Var: ConstVariable>(PhantomData<Var>);
+pub struct ConstVariableAssign<Var: ConstVariable, const VALUE: ConstValue>(PhantomData<Var>);
+
+impl<Input, Var: ConstVariable, const VALUE: ConstValue, F, Next> Action<Input>
+    for (PhantomData<ConstVariableAssign<Var, VALUE>>, F)
 where
     F: FnOnce() -> Next,
-    Next: Action<{ <ConstVariableAssign<Var, VALUE> as ConstContextMap<INPUT>>::OUTPUT }>,
+    Next: Action<VarList<Var::Key, VALUE, Input>>,
 {
     type Output = Next::Output;
     fn eval(self) -> Self::Output {
@@ -273,15 +225,15 @@ where
     }
 }
 
-impl<const INPUT: ConstVariables, Var: ConstVariable, F, Next> Action<INPUT>
-    for (PhantomData<ConstVariableGet<Var>>, F)
+impl<Input, Var: ConstVariable, F, Next> Action<Input> for (PhantomData<ConstVariableGet<Var>>, F)
 where
     F: FnOnce(Var::Value) -> Next,
-    Next: Action<INPUT>,
+    Next: Action<Input>,
+    Input: Search<Var::Key>,
 {
     type Output = Next::Output;
     fn eval(self) -> Self::Output {
-        let next = (self.1)(INPUT.get::<Var>());
+        let next = (self.1)(<ConstContext<Input> as ConstContextGet<Var>>::OUTPUT);
         next.eval()
     }
 }
@@ -325,7 +277,7 @@ macro_rules! ctx {
 #[cfg(test)]
 fn test() {
     type Var1 = ((), u32);
-    const fn f<const VARS: ConstVariables>(ctx: ConstContext<VARS>) -> (ConstContext<VARS>, u32) {
+    const fn f<Vars>(ctx: ConstContext<Vars>) -> (ConstContext<Vars>, u32) {
         (ctx, 42)
     }
 
@@ -339,14 +291,14 @@ fn test() {
         pure v
     };
 
-    /*
-    let action3_failed = ctx! {
+    let action3 = ctx! {
         Var1 = 90; // compiler cannot infer VARS yet?
         v <= f();
-        pure v
+        w <= Var1;
+        pure (v + w)
     };
-    */
 
-    assert_eq!(Action::<{ ConstVariables::empty() }>::eval(action), 90);
-    assert_eq!(Action::<{ ConstVariables::empty() }>::eval(action2), 42);
+    assert_eq!(Action::<VarListEnd>::eval(action), 90);
+    assert_eq!(Action::<VarListEnd>::eval(action2), 42);
+    assert_eq!(Action::<VarListEnd>::eval(action3), 132);
 }

@@ -225,8 +225,7 @@ impl<Var: ConstVariable, const VALUE: ConstValue, const INPUT: ConstVariables>
     const OUTPUT: ConstVariables = INPUT.assign::<Var>(VALUE);
 }
 
-/*
-trait Action<const INPUT: ConstVariables> {
+pub trait Action<const INPUT: ConstVariables> {
     type Output;
     fn eval(self) -> Self::Output;
 }
@@ -243,6 +242,21 @@ where
     type Output = T;
     fn eval(self) -> Self::Output {
         self()
+    }
+}
+
+impl<const INPUT: ConstVariables, const OUTPUT: ConstVariables, F, T, C, Next> Action<INPUT>
+    for (F, C)
+where
+    F: FnOnce(ConstContext<INPUT>) -> (ConstContext<OUTPUT>, T),
+    C: FnOnce(T) -> Next,
+    Next: Action<OUTPUT>,
+{
+    type Output = Next::Output;
+    fn eval(self) -> Self::Output {
+        let (_, arg) = self.0(ConstContext);
+        let next = self.1(arg);
+        next.eval()
     }
 }
 
@@ -272,25 +286,67 @@ where
     }
 }
 
+#[macro_export]
 macro_rules! ctx {
-    (pure $e:expr) => { move || { $e } };
-    ($var:ty) => { (PhantomData::<ConstVariableGet<$var>>, move |var| move || var) };
-    (let $v:ident = $e:expr; $($rem:tt)*) => {{ let $v = $e; ctx!($($rem)*) }};
-    ($var:ty = $e:expr; $($rem:tt)*) => { (PhantomData::<ConstVariableAssign<$var, { ConstValue::new($e as <$var as ConstVariable>::Value) }>>, move || { ctx!($($rem)*) }) };
-    ($v:ident <= $var:ty; $($rem:tt)* ) => { (PhantomData::<ConstVariableGet<$var>>, move |$v| { ctx!($($rem)*) }) };
+    () => {{
+        || ()
+    }};
+    (pure $e:expr) => {{
+        move || $e
+    }};
+    ($cvar:ty) => {{
+        type __Get = ConstVariableGet<$cvar>;
+        type __Value = <$cvar as ConstVariable>::Value;
+        (PhantomData::<__Get>, move |var: __Value| move || var)
+    }};
+    (let $var:ident = $e:expr; $($rem:tt)*) => {{
+        let $var = $e;
+        ctx! { $($rem)* }
+    }};
+    ($cvar:ty = $e:expr; $($rem:tt)*) => {{
+        type __Value = <$cvar as ConstVariable>::Value;
+        type __Assign = ConstVariableAssign<$cvar, { ConstValue::new::<__Value>($e) }>;
+        (PhantomData::<__Assign>, move || { ctx! { $($rem)* } })
+    }};
+    ($func:ident($($arg:expr)*); $($rem:tt)* ) => {{
+        (|ctx| $func(ctx), move |_| { ctx!($($rem)*) })
+    }};
+    ($var:ident <= $func:ident($($arg:expr)*); $($rem:tt)* ) => {{
+        (|ctx| $func(ctx), move |$var| { ctx!($($rem)*) })
+    }};
+    ($var:ident <= $cvar:ty; $($rem:tt)* ) => {{
+        type __Get = ConstVariableGet<$cvar>;
+        type __Value = <$cvar as ConstVariable>::Value;
+        (PhantomData::<__Get>, move |$var: __Value| { ctx!($($rem)*) })
+    }};
 }
 
 #[test]
 #[cfg(test)]
 fn test() {
     type Var1 = ((), u32);
-    type Var2 = (u32, u32);
-    type A = impl Action<{ ConstVariables::empty() }, Output = u32>;
-    let action: A = ctx! {
+    const fn f<const VARS: ConstVariables>(ctx: ConstContext<VARS>) -> (ConstContext<VARS>, u32) {
+        (ctx, 42)
+    }
+
+    let action = ctx! {
         Var1 = 90;
         Var1
     };
 
-    assert_eq!(action.eval(), 90);
+    let action2 = ctx! {
+        v <= f();
+        pure v
+    };
+
+    /*
+    let action3_failed = ctx! {
+        Var1 = 90; // compiler cannot infer VARS yet?
+        v <= f();
+        pure v
+    };
+    */
+
+    assert_eq!(Action::<{ ConstVariables::empty() }>::eval(action), 90);
+    assert_eq!(Action::<{ ConstVariables::empty() }>::eval(action2), 42);
 }
-*/

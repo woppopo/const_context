@@ -1,16 +1,11 @@
 #![feature(adt_const_params)]
-#![feature(const_trait_impl)]
 #![feature(generic_const_exprs)]
 #![feature(inline_const)]
 
-use const_context::{
-    ConstContext, ConstContextGet, ConstContextPush, ConstValue, ConstVariable, Search,
-};
+use const_context::{ConstContext, ConstContextPush, ConstValue, ConstVariable, Search};
 
 struct Name<const NAME: &'static str>;
 type Var1 = (Name<"value1">, u32);
-type Var2 = (Name<"value2">, u32);
-type Var3 = (Name<"value3">, u32);
 
 type Push<Vars, Var, const VAL: ConstValue> =
     <ConstContext<Vars> as ConstContextPush<Var, VAL>>::Output;

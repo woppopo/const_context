@@ -9,10 +9,6 @@
 #![feature(const_slice_from_raw_parts_mut)]
 #![feature(const_type_id)]
 #![feature(core_intrinsics)]
-#![feature(decl_macro)]
-#![feature(generic_const_exprs)]
-#![feature(inline_const)]
-#![feature(type_alias_impl_trait)]
 
 use core::any::TypeId;
 use core::intrinsics::const_allocate;

@@ -254,10 +254,10 @@ macro_rules! ctx {
         (PhantomData::<__Assign>, move || { ctx! { $($rem)* } })
     }};
     ($func:ident($($arg:expr)*); $($rem:tt)* ) => {{
-        (|ctx| $func(ctx), move |_| { ctx!($($rem)*) })
+        (|ctx| $func(ctx, $($arg)*), move |_| { ctx!($($rem)*) })
     }};
     ($var:ident <= $func:ident($($arg:expr)*); $($rem:tt)* ) => {{
-        (|ctx| $func(ctx), move |$var| { ctx!($($rem)*) })
+        (|ctx| $func(ctx, $($arg)*), move |$var| { ctx!($($rem)*) })
     }};
     ($var:ident <= $cvar:ty; $($rem:tt)* ) => {{
         type __Get = ConstVariableGet<$cvar>;
@@ -270,8 +270,8 @@ macro_rules! ctx {
 #[cfg(test)]
 fn test() {
     type Var1 = ((), u32);
-    const fn f<Vars>(ctx: ConstContext<Vars>) -> (ConstContext<Vars>, u32) {
-        (ctx, 42)
+    const fn f<Vars>(ctx: ConstContext<Vars>, n: u32) -> (ConstContext<Vars>, u32) {
+        (ctx, n)
     }
 
     let action = ctx! {
@@ -280,13 +280,13 @@ fn test() {
     };
 
     let action2 = ctx! {
-        v <= f();
+        v <= f(42);
         pure v
     };
 
     let action3 = ctx! {
         Var1 = 90;
-        v <= f();
+        v <= f(42);
         w <= Var1;
         pure (v + w)
     };

@@ -1,16 +1,13 @@
 #![cfg_attr(not(test), no_std)]
 #![feature(adt_const_params)]
-#![feature(associated_type_defaults)]
 #![feature(const_heap)]
 #![feature(const_mut_refs)]
 #![feature(const_option)]
 #![feature(const_ptr_read)]
 #![feature(const_ptr_write)]
 #![feature(const_slice_from_raw_parts_mut)]
-#![feature(const_trait_impl)]
 #![feature(const_type_id)]
 #![feature(core_intrinsics)]
-#![feature(inherent_associated_types)]
 #![feature(inline_const)]
 
 use core::any::TypeId;
@@ -99,56 +96,6 @@ where
 impl<V: ConstVariable> ConstVariable for &V {
     type Key = V::Key;
     type Value = V::Value;
-}
-
-pub struct ConstContext<Vars>(PhantomData<Vars>);
-
-impl ConstContext<VarListEnd> {
-    pub const fn empty() -> Self {
-        Self(PhantomData)
-    }
-}
-
-impl<Vars> ConstContext<Vars> {
-    pub const fn get_runtime<Var>(&self) -> Var::Value
-    where
-        Var: ConstVariable,
-        Vars: Search<Var::Key, Var::Value>,
-    {
-        <Self as ConstContextGet<Var>>::GOT
-    }
-}
-
-#[const_trait]
-pub trait ConstContextAbstract {
-    type Vars;
-    type Push<Var: ConstVariable, const VAL: ConstValue>: ConstContextAbstract;
-    fn push<Var: ConstVariable, const VAL: ConstValue>(self) -> Self::Push<Var, VAL>;
-}
-
-impl<Vars> const ConstContextAbstract for ConstContext<Vars> {
-    type Vars = Vars;
-    type Push<Var: ConstVariable, const VAL: ConstValue> =
-        ConstContext<VarList<Var::Key, VAL, Vars>>;
-
-    fn push<Var: ConstVariable, const VAL: ConstValue>(self) -> Self::Push<Var, VAL> {
-        ConstContext(PhantomData)
-    }
-}
-
-pub trait ConstContextGet<Var>
-where
-    Var: ConstVariable,
-{
-    const GOT: Var::Value;
-}
-
-impl<Vars, Var> ConstContextGet<Var> for ConstContext<Vars>
-where
-    Var: ConstVariable,
-    Vars: Search<Var::Key, Var::Value>,
-{
-    const GOT: Var::Value = Vars::FOUND.unwrap();
 }
 
 pub trait Action<Vars> {
@@ -281,6 +228,10 @@ macro_rules! ctx {
     }};
     ($action:expr) => {{
         $action
+    }};
+    (let _ = $e:expr; $($rem:tt)*) => {{
+        let _ = $e;
+        $crate::ctx! { $($rem)* }
     }};
     (let $var:ident = $e:expr; $($rem:tt)*) => {{
         let $var = $e;

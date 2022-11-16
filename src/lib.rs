@@ -7,6 +7,7 @@
 #![feature(const_ptr_read)]
 #![feature(const_ptr_write)]
 #![feature(const_slice_from_raw_parts_mut)]
+#![feature(const_trait_impl)]
 #![feature(const_type_id)]
 #![feature(core_intrinsics)]
 #![feature(inherent_associated_types)]
@@ -106,36 +107,29 @@ impl ConstContext<VarListEnd> {
 }
 
 impl<Vars> ConstContext<Vars> {
+    pub const fn get_runtime<Var>(&self) -> Var::Value
+    where
+        Var: ConstVariable,
+        Vars: Search<Var::Key>,
+    {
+        <Self as ConstContextGet<Var>>::GOT
+    }
+}
+
+#[const_trait]
+pub trait ConstContextAbstract {
+    type Vars;
+    type Push<Var: ConstVariable, const VAL: ConstValue>: ConstContextAbstract;
+    fn push<Var: ConstVariable, const VAL: ConstValue>(self) -> Self::Push<Var, VAL>;
+}
+
+impl<Vars> const ConstContextAbstract for ConstContext<Vars> {
+    type Vars = Vars;
     type Push<Var: ConstVariable, const VAL: ConstValue> =
         ConstContext<VarList<Var::Key, VAL, Vars>>;
 
-    pub const fn into<NextVars>(self) -> ConstContext<NextVars> {
+    fn push<Var: ConstVariable, const VAL: ConstValue>(self) -> Self::Push<Var, VAL> {
         ConstContext(PhantomData)
-    }
-
-    pub const fn get_from_type<Var>() -> Var::Value
-    where
-        Var: ConstVariable,
-        Vars: Search<Var::Key>,
-    {
-        <Self as ConstContextGet<Var>>::OUTPUT
-    }
-
-    pub const fn get<Var>(&self) -> Var::Value
-    where
-        Var: ConstVariable,
-        Vars: Search<Var::Key>,
-    {
-        <Self as ConstContextGet<Var>>::OUTPUT
-    }
-
-    pub const fn push<Var, const VAL: ConstValue>(
-        self,
-    ) -> <ConstContext<Vars> as ConstContextPush<Var, VAL>>::Output
-    where
-        Var: ConstVariable,
-    {
-        self.into()
     }
 }
 
@@ -143,7 +137,7 @@ pub trait ConstContextGet<Var>
 where
     Var: ConstVariable,
 {
-    const OUTPUT: Var::Value;
+    const GOT: Var::Value;
 }
 
 impl<Vars, Var> ConstContextGet<Var> for ConstContext<Vars>
@@ -151,29 +145,17 @@ where
     Var: ConstVariable,
     Vars: Search<Var::Key>,
 {
-    const OUTPUT: Var::Value = Vars::FOUND.unwrap().into_inner();
-}
-
-pub trait ConstContextPush<Var, const VAL: ConstValue>
-where
-    Var: ConstVariable,
-{
-    type Output;
-}
-
-impl<Vars, Var, const VAL: ConstValue> ConstContextPush<Var, VAL> for ConstContext<Vars>
-where
-    Var: ConstVariable,
-{
-    type Output = ConstContext<VarList<Var::Key, VAL, Vars>>;
+    const GOT: Var::Value = Vars::FOUND.unwrap().into_inner();
 }
 
 pub trait Action<Vars> {
+    type OutputVars;
     type Output;
     fn eval(self) -> Self::Output;
 }
 
 impl<Input> Action<Input> for () {
+    type OutputVars = Input;
     type Output = ();
     fn eval(self) -> Self::Output {}
 }
@@ -182,6 +164,7 @@ impl<Input, F, T> Action<Input> for F
 where
     F: FnOnce() -> T,
 {
+    type OutputVars = Input;
     type Output = T;
     fn eval(self) -> Self::Output {
         self()
@@ -194,10 +177,26 @@ where
     C: FnOnce(T) -> Next,
     Next: Action<Output>,
 {
+    type OutputVars = Next::OutputVars;
     type Output = Next::Output;
     fn eval(self) -> Self::Output {
         let (_, arg) = self.0(ConstContext(PhantomData));
         let next = self.1(arg);
+        next.eval()
+    }
+}
+
+impl<Input, A, F, Next> Action<Input> for (A, F, ())
+where
+    A: Action<Input>,
+    F: FnOnce(A::Output) -> Next,
+    Next: Action<A::OutputVars>,
+{
+    type OutputVars = Next::OutputVars;
+    type Output = Next::Output;
+    fn eval(self) -> Self::Output {
+        let ret = self.0.eval();
+        let next = self.1(ret);
         next.eval()
     }
 }
@@ -211,6 +210,7 @@ where
     F: FnOnce() -> Next,
     Next: Action<VarList<Var::Key, VALUE, Input>>,
 {
+    type OutputVars = Next::OutputVars;
     type Output = Next::Output;
     fn eval(self) -> Self::Output {
         let next = (self.1)();
@@ -224,9 +224,10 @@ where
     Next: Action<Input>,
     Input: Search<Var::Key>,
 {
+    type OutputVars = Next::OutputVars;
     type Output = Next::Output;
     fn eval(self) -> Self::Output {
-        let next = (self.1)(<ConstContext<Input> as ConstContextGet<Var>>::OUTPUT);
+        let next = (self.1)(<ConstContext<Input> as ConstContextGet<Var>>::GOT);
         next.eval()
     }
 }
@@ -234,7 +235,7 @@ where
 #[macro_export]
 macro_rules! ctx {
     () => {{
-        || ()
+        ()
     }};
     (pure $e:expr) => {{
         move || $e
@@ -263,6 +264,9 @@ macro_rules! ctx {
         type __Get = ConstVariableGet<$cvar>;
         type __Value = <$cvar as ConstVariable>::Value;
         (PhantomData::<__Get>, move |$var: __Value| { ctx!($($rem)*) })
+    }};
+    ($action:expr; $($rem:tt)*) => {{
+        ($action, move |_| { ctx!($($rem)*) }, ())
     }};
 }
 
@@ -294,4 +298,16 @@ fn test() {
     assert_eq!(Action::<VarListEnd>::eval(action), 90);
     assert_eq!(Action::<VarListEnd>::eval(action2), 42);
     assert_eq!(Action::<VarListEnd>::eval(action3), 132);
+
+    let action = ctx! {
+        Var1 = 90;
+        Var1
+    };
+
+    let action2 = ctx! {
+        action;
+        Var1
+    };
+
+    assert_eq!(Action::<VarListEnd>::eval(action2), 90);
 }

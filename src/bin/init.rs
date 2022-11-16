@@ -1,6 +1,7 @@
-use const_context::{ConstContext, ConstContextPush, ConstValue, ConstVariable};
+use const_context::{ConstContext, ConstValue, ConstVariable};
 
 mod need_init {
+    use const_context::ConstContextAbstract;
 
     use super::*;
 
@@ -28,12 +29,11 @@ mod need_init {
         type Value = Self;
     }
 
-    pub fn initialize<Vars>(
-        ctx: ConstContext<Vars>,
-    ) -> <ConstContext<Vars> as ConstContextPush<Functions, { ConstValue::new(Functions) }>>::Output
-    {
+    pub fn initialize<Ctx: ConstContextAbstract>(
+        ctx: Ctx,
+    ) -> Ctx::Push<Functions, { ConstValue::new(Functions) }> {
         initialize_value();
-        ctx.into()
+        ctx.push()
     }
 }
 
@@ -42,7 +42,7 @@ fn main() {
 
     let ctx = ConstContext::empty();
     let ctx = need_init::initialize(ctx);
-    let funcs = ctx.get::<Functions>();
+    let funcs = ctx.get_runtime::<Functions>();
 
     println!("{}", funcs.foo());
 }

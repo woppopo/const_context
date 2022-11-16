@@ -250,6 +250,7 @@ impl<Variable, const VALUE: ConstValue, NextAction>
         Self(PhantomData, next)
     }
 }
+
 impl<Input, Variable, const VALUE: ConstValue, NextAction> Action<Input>
     for ConstContextAssignAction<Variable, VALUE, NextAction>
 where

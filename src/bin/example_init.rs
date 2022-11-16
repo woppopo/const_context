@@ -17,7 +17,7 @@ mod need_init {
     }
 
     #[derive(PartialEq, Eq)]
-    pub struct Functions;
+    pub struct Functions(());
 
     impl Functions {
         pub fn foo(&self) -> u32 {
@@ -33,7 +33,7 @@ mod need_init {
     pub macro initialize() {{
         ctx! {
             let _ = initialize_value();
-            const Functions = Functions;
+            const Functions = Functions(());
         }
     }}
 }
@@ -41,11 +41,14 @@ mod need_init {
 fn main() {
     use need_init::Functions;
 
-    let c = ctx! {
+    // We cannot construct `Functions` ourself.
+    //let functions = Functions(());
+
+    let action = ctx! {
         need_init::initialize!();
         funcs <= get Functions;
         let _ = println!("{}", funcs.foo());
     };
 
-    c.start_eval();
+    action.start_eval();
 }

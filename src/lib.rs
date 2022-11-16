@@ -154,6 +154,27 @@ pub trait Action<Vars> {
     fn eval(self) -> Self::Output;
 }
 
+pub struct ConstContextBindAction<PreviousAction, ActionConstructor>(
+    PreviousAction,
+    ActionConstructor,
+);
+
+impl<Input, PreviousAction, ActionConstructor, NextAction> Action<Input>
+    for ConstContextBindAction<PreviousAction, ActionConstructor>
+where
+    PreviousAction: Action<Input>,
+    ActionConstructor: FnOnce(PreviousAction::Output) -> NextAction,
+    NextAction: Action<PreviousAction::OutputVars>,
+{
+    type OutputVars = NextAction::OutputVars;
+    type Output = NextAction::Output;
+    fn eval(self) -> Self::Output {
+        let Self(action, constructor) = self;
+        let output = action.eval();
+        constructor(output).eval()
+    }
+}
+
 impl<Input, Output, F, T, C, Next> Action<Input> for (F, C)
 where
     F: FnOnce(ConstContext<Input>) -> (ConstContext<Output>, T),
@@ -165,21 +186,6 @@ where
     fn eval(self) -> Self::Output {
         let (_, arg) = self.0(ConstContext(PhantomData));
         let next = self.1(arg);
-        next.eval()
-    }
-}
-
-impl<Input, A, F, Next> Action<Input> for (A, F, ())
-where
-    A: Action<Input>,
-    F: FnOnce(A::Output) -> Next,
-    Next: Action<A::OutputVars>,
-{
-    type OutputVars = Next::OutputVars;
-    type Output = Next::Output;
-    fn eval(self) -> Self::Output {
-        let ret = self.0.eval();
-        let next = self.1(ret);
         next.eval()
     }
 }
@@ -254,7 +260,7 @@ macro_rules! ctx {
         type __Value = <$cvar as ConstVariable>::Value;
         ConstContextAssignAction::<_, { ConstValue::new::<__Value>($e) }, _>(PhantomData::<$cvar>, { ctx!($($rem)*) })
     }};
-    ($func:ident($($arg:expr)*); $($rem:tt)* ) => {{
+    ($action:ident($($arg:expr)*); $($rem:tt)* ) => {{
         (move |ctx| $func(ctx, $($arg)*), move |_| { ctx!($($rem)*) })
     }};
     ($var:ident <= $func:ident($($arg:expr)*); $($rem:tt)* ) => {{
@@ -264,7 +270,7 @@ macro_rules! ctx {
         ConstContextGetAction(PhantomData::<$cvar>, move |$var| { ctx!($($rem)*) })
     }};
     ($action:expr; $($rem:tt)*) => {{
-        ($action, move |_| { ctx!($($rem)*) }, ())
+        ConstContextBindAction($action, move |_| { ctx!($($rem)*) })
     }};
 }
 

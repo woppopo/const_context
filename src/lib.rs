@@ -154,6 +154,19 @@ pub trait Action<Vars> {
     fn eval(self) -> Self::Output;
 }
 
+pub trait StartEvaluation {
+    type Output;
+    fn start_eval(self) -> Self::Output;
+}
+
+impl<T: Action<VarListEnd>> StartEvaluation for T {
+    type Output = T::Output;
+
+    fn start_eval(self) -> Self::Output {
+        self.eval()
+    }
+}
+
 pub struct ConstContextBindAction<PreviousAction, ActionConstructor>(
     PreviousAction,
     ActionConstructor,
@@ -249,7 +262,7 @@ macro_rules! ctx {
     (pure $e:expr) => {{
         ConstContextReturnAction($e)
     }};
-    ($cvar:ty) => {{
+    (get $cvar:ty) => {{
         ConstContextGetAction(PhantomData::<$cvar>, ConstContextReturnAction)
     }};
     (let $var:ident = $e:expr; $($rem:tt)*) => {{
@@ -260,14 +273,12 @@ macro_rules! ctx {
         type __Value = <$cvar as ConstVariable>::Value;
         ConstContextAssignAction::<_, { ConstValue::new::<__Value>($e) }, _>(PhantomData::<$cvar>, { ctx!($($rem)*) })
     }};
-    ($action:ident($($arg:expr)*); $($rem:tt)* ) => {{
-        (move |ctx| $func(ctx, $($arg)*), move |_| { ctx!($($rem)*) })
+    ($var:ident <= $action:expr; $($rem:tt)* ) => {{
+        ConstContextBindAction($action, move |$var| { ctx!($($rem)*) })
     }};
-    ($var:ident <= $func:ident($($arg:expr)*); $($rem:tt)* ) => {{
-        (move |ctx| $func(ctx, $($arg)*), move |$var| { ctx!($($rem)*) })
-    }};
-    ($var:ident <= $cvar:ty; $($rem:tt)* ) => {{
-        ConstContextGetAction(PhantomData::<$cvar>, move |$var| { ctx!($($rem)*) })
+    ($var:ident <= get $cvar:ty; $($rem:tt)* ) => {{
+        type __Value = <$cvar as ConstVariable>::Value;
+        ConstContextGetAction(PhantomData::<$cvar>, move |$var: __Value| { ctx!($($rem)*) })
     }};
     ($action:expr; $($rem:tt)*) => {{
         ConstContextBindAction($action, move |_| { ctx!($($rem)*) })
@@ -277,14 +288,17 @@ macro_rules! ctx {
 #[test]
 #[cfg(test)]
 fn test() {
-    type Var1 = ((), u32);
-    const fn f<Vars>(ctx: ConstContext<Vars>, n: u32) -> (ConstContext<Vars>, u32) {
-        (ctx, n)
+    type Var = ((), u32);
+
+    const fn f<Vars>(n: u32) -> impl Action<Vars, OutputVars = Vars, Output = u32> {
+        ctx! {
+            pure n
+        }
     }
 
     let action = ctx! {
-        Var1 = 90;
-        Var1
+        Var = 90;
+        get Var
     };
 
     let action2 = ctx! {
@@ -293,25 +307,25 @@ fn test() {
     };
 
     let action3 = ctx! {
-        Var1 = 90;
+        Var = 90;
         v <= f(42);
-        w <= Var1;
+        w <= get Var;
         pure (v + w)
     };
 
-    assert_eq!(Action::<VarListEnd>::eval(action), 90);
-    assert_eq!(Action::<VarListEnd>::eval(action2), 42);
-    assert_eq!(Action::<VarListEnd>::eval(action3), 132);
+    assert_eq!(action.start_eval(), 90);
+    assert_eq!(action2.start_eval(), 42);
+    assert_eq!(action3.start_eval(), 132);
 
     let action = ctx! {
-        Var1 = 90;
-        Var1
+        Var = 90;
+        get Var
     };
 
     let action2 = ctx! {
         action;
-        Var1
+        get Var
     };
 
-    assert_eq!(Action::<VarListEnd>::eval(action2), 90);
+    assert_eq!(action2.start_eval(), 90);
 }

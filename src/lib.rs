@@ -278,11 +278,17 @@ macro_rules! ctx {
 fn test() {
     type Var = ((), u32);
 
-    const fn f<Vars>(n: u32) -> impl Action<Vars, OutputVars = Vars, Output = u32> {
+    let f = |n: u32| {
         ctx! {
             pure n
         }
-    }
+    };
+
+    let push90 = || {
+        ctx! {
+            const Var = 90;
+        }
+    };
 
     let action = ctx! {
         const Var = 90;
@@ -295,7 +301,7 @@ fn test() {
     };
 
     let action3 = ctx! {
-        const Var = 90;
+        push90();
         v <= f(42);
         w <= get Var;
         pure (v + w)

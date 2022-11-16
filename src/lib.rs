@@ -265,11 +265,14 @@ macro_rules! ctx {
     (get $cvar:ty) => {{
         ConstContextGetAction(PhantomData::<$cvar>, ConstContextReturnAction)
     }};
+    ($action:expr) => {{
+        $action
+    }};
     (let $var:ident = $e:expr; $($rem:tt)*) => {{
         let $var = $e;
         ctx! { $($rem)* }
     }};
-    ($cvar:ty = $e:expr; $($rem:tt)*) => {{
+    (const $cvar:ty = $e:expr; $($rem:tt)*) => {{
         type __Value = <$cvar as ConstVariable>::Value;
         ConstContextAssignAction::<_, { ConstValue::new::<__Value>($e) }, _>(PhantomData::<$cvar>, { ctx!($($rem)*) })
     }};
@@ -297,7 +300,7 @@ fn test() {
     }
 
     let action = ctx! {
-        Var = 90;
+        const Var = 90;
         get Var
     };
 
@@ -307,7 +310,7 @@ fn test() {
     };
 
     let action3 = ctx! {
-        Var = 90;
+        const Var = 90;
         v <= f(42);
         w <= get Var;
         pure (v + w)
@@ -318,7 +321,13 @@ fn test() {
     assert_eq!(action3.start_eval(), 132);
 
     let action = ctx! {
-        Var = 90;
+        f(42)
+    };
+
+    assert_eq!(action.start_eval(), 42);
+
+    let action = ctx! {
+        const Var = 90;
         get Var
     };
 

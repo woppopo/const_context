@@ -11,6 +11,7 @@
 #![feature(const_type_id)]
 #![feature(core_intrinsics)]
 #![feature(inherent_associated_types)]
+#![feature(inline_const)]
 
 use core::any::TypeId;
 use core::intrinsics::const_allocate;
@@ -59,21 +60,23 @@ pub struct VarListEnd;
 
 pub struct VarList<Key, const VAL: ConstValue, Next>(PhantomData<(Key, Next)>);
 
-pub trait Search<Key> {
-    const FOUND: Option<ConstValue>;
+pub trait Search<Key, Value> {
+    const FOUND: Option<Value>;
 }
 
-impl<Key> Search<Key> for VarListEnd {
-    const FOUND: Option<ConstValue> = None;
+impl<Key, Value> Search<Key, Value> for VarListEnd {
+    const FOUND: Option<Value> = None;
 }
 
-impl<Key, Hold, const VAL: ConstValue, Next: Search<Key>> Search<Key> for VarList<Hold, VAL, Next>
+impl<Key, Value, Hold, const VAL: ConstValue, Next: Search<Key, Value>> Search<Key, Value>
+    for VarList<Hold, VAL, Next>
 where
     Key: 'static,
+    Value: 'static,
     Hold: 'static,
 {
-    const FOUND: Option<ConstValue> = if eq_typeid(TypeId::of::<Key>(), TypeId::of::<Hold>()) {
-        Some(VAL)
+    const FOUND: Option<Value> = if eq_typeid(TypeId::of::<Key>(), TypeId::of::<Hold>()) {
+        Some(VAL.into_inner())
     } else {
         Next::FOUND
     };
@@ -110,7 +113,7 @@ impl<Vars> ConstContext<Vars> {
     pub const fn get_runtime<Var>(&self) -> Var::Value
     where
         Var: ConstVariable,
-        Vars: Search<Var::Key>,
+        Vars: Search<Var::Key, Var::Value>,
     {
         <Self as ConstContextGet<Var>>::GOT
     }
@@ -143,9 +146,9 @@ where
 impl<Vars, Var> ConstContextGet<Var> for ConstContext<Vars>
 where
     Var: ConstVariable,
-    Vars: Search<Var::Key>,
+    Vars: Search<Var::Key, Var::Value>,
 {
-    const GOT: Var::Value = Vars::FOUND.unwrap().into_inner();
+    const GOT: Var::Value = Vars::FOUND.unwrap();
 }
 
 pub trait Action<Vars> {
@@ -224,7 +227,7 @@ impl<Variable, ActionConstructor> ConstContextGetAction<Variable, ActionConstruc
 impl<Input, Variable, ActionConstructor, NextAction> Action<Input>
     for ConstContextGetAction<Variable, ActionConstructor>
 where
-    Input: Search<Variable::Key>,
+    Input: Search<Variable::Key, Variable::Value>,
     Variable: ConstVariable,
     ActionConstructor: FnOnce(Variable::Value) -> NextAction,
     NextAction: Action<Input>,
@@ -233,7 +236,7 @@ where
     type Output = NextAction::Output;
     fn eval(self) -> Self::Output {
         let Self(_, constructor) = self;
-        let got = <ConstContext<Input> as ConstContextGet<Variable>>::GOT;
+        let got = const { Input::FOUND.unwrap() };
         constructor(got).eval()
     }
 }

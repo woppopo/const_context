@@ -184,9 +184,9 @@ where
     }
 }
 
-pub struct ConstVariableReturnAction<T>(T);
+pub struct ConstContextReturnAction<T>(T);
 
-impl<Input, T> Action<Input> for ConstVariableReturnAction<T> {
+impl<Input, T> Action<Input> for ConstContextReturnAction<T> {
     type OutputVars = Input;
     type Output = T;
     fn eval(self) -> Self::Output {
@@ -194,13 +194,13 @@ impl<Input, T> Action<Input> for ConstVariableReturnAction<T> {
     }
 }
 
-pub struct ConstVariableGetAction<Variable, ActionConstructor>(
+pub struct ConstContextGetAction<Variable, ActionConstructor>(
     PhantomData<Variable>,
     ActionConstructor,
 );
 
 impl<Input, Variable, ActionConstructor, NextAction> Action<Input>
-    for ConstVariableGetAction<Variable, ActionConstructor>
+    for ConstContextGetAction<Variable, ActionConstructor>
 where
     Input: Search<Variable::Key>,
     Variable: ConstVariable,
@@ -216,13 +216,13 @@ where
     }
 }
 
-pub struct ConstVariableAssignAction<Variable, const VALUE: ConstValue, NextAction>(
+pub struct ConstContextAssignAction<Variable, const VALUE: ConstValue, NextAction>(
     PhantomData<Variable>,
     NextAction,
 );
 
 impl<Input, Variable, const VALUE: ConstValue, NextAction> Action<Input>
-    for ConstVariableAssignAction<Variable, VALUE, NextAction>
+    for ConstContextAssignAction<Variable, VALUE, NextAction>
 where
     Variable: ConstVariable,
     NextAction: Action<VarList<Variable::Key, VALUE, Input>>,
@@ -238,13 +238,13 @@ where
 #[macro_export]
 macro_rules! ctx {
     () => {{
-        ConstVariableReturnAction(())
+        ConstContextReturnAction(())
     }};
     (pure $e:expr) => {{
-        ConstVariableReturnAction($e)
+        ConstContextReturnAction($e)
     }};
     ($cvar:ty) => {{
-        ConstVariableGetAction(PhantomData::<$cvar>, ConstVariableReturnAction)
+        ConstContextGetAction(PhantomData::<$cvar>, ConstContextReturnAction)
     }};
     (let $var:ident = $e:expr; $($rem:tt)*) => {{
         let $var = $e;
@@ -252,7 +252,7 @@ macro_rules! ctx {
     }};
     ($cvar:ty = $e:expr; $($rem:tt)*) => {{
         type __Value = <$cvar as ConstVariable>::Value;
-        ConstVariableAssignAction::<_, { ConstValue::new::<__Value>($e) }, _>(PhantomData::<$cvar>, { ctx!($($rem)*) })
+        ConstContextAssignAction::<_, { ConstValue::new::<__Value>($e) }, _>(PhantomData::<$cvar>, { ctx!($($rem)*) })
     }};
     ($func:ident($($arg:expr)*); $($rem:tt)* ) => {{
         (move |ctx| $func(ctx, $($arg)*), move |_| { ctx!($($rem)*) })
@@ -261,7 +261,7 @@ macro_rules! ctx {
         (move |ctx| $func(ctx, $($arg)*), move |$var| { ctx!($($rem)*) })
     }};
     ($var:ident <= $cvar:ty; $($rem:tt)* ) => {{
-        ConstVariableGetAction(PhantomData::<$cvar>, move |$var| { ctx!($($rem)*) })
+        ConstContextGetAction(PhantomData::<$cvar>, move |$var| { ctx!($($rem)*) })
     }};
     ($action:expr; $($rem:tt)*) => {{
         ($action, move |_| { ctx!($($rem)*) }, ())

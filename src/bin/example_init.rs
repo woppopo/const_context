@@ -2,8 +2,6 @@
 
 use const_context::{ctx, ConstVariable, StartEvaluation};
 
-use crate::need_init::initialize;
-
 mod need_init {
     use super::*;
 
@@ -43,9 +41,8 @@ mod need_init {
 fn main() {
     use need_init::Functions;
 
-    let init = initialize!();
     let c = ctx! {
-        init;
+        need_init::initialize!();
         funcs <= get Functions;
         let _ = println!("{}", funcs.foo());
     };

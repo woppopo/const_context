@@ -188,21 +188,6 @@ where
     }
 }
 
-impl<Input, Output, F, T, C, Next> Action<Input> for (F, C)
-where
-    F: FnOnce(ConstContext<Input>) -> (ConstContext<Output>, T),
-    C: FnOnce(T) -> Next,
-    Next: Action<Output>,
-{
-    type OutputVars = Next::OutputVars;
-    type Output = Next::Output;
-    fn eval(self) -> Self::Output {
-        let (_, arg) = self.0(ConstContext(PhantomData));
-        let next = self.1(arg);
-        next.eval()
-    }
-}
-
 pub struct ConstContextReturnAction<T>(T);
 
 impl<Input, T> Action<Input> for ConstContextReturnAction<T> {

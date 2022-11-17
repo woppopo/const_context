@@ -131,7 +131,7 @@ const fn error_not_found<Key>() -> &'static str {
 }
 
 #[track_caller]
-const fn find_variable<Key, Value, List: VariableList>() -> Value
+pub const fn find_variable<Key, Value, List: VariableList>() -> Value
 where
     Key: 'static,
     Value: 'static,
@@ -368,10 +368,10 @@ macro_rules! ctx {
         #[allow(non_camel_case_types)]
         const fn __construct_const_value<
             Input: $crate::VariableList,
-            $($id : $crate::ConstVariable<Value = <$var as ConstVariable>::Value>,)*
-        >() -> ConstValue {
+            $($id : $crate::ConstVariable<Value = <$var as $crate::ConstVariable>::Value>,)*
+        >() -> $crate::ConstValue {
             $(let $id: $id::Value = $crate::find_variable::<$id::Key, $id::Value, Input>();)*
-            ConstValue::new::<__Value>($e)
+            $crate::ConstValue::new::<__Value>($e)
         }
 
         #[doc(hidden)]
@@ -401,7 +401,7 @@ macro_rules! ctx {
     }};
     ($var:ident <= get $cvar:ty; $($rem:tt)* ) => {{
         #[doc(hidden)]
-        type __Value = <$cvar as ConstVariable>::Value;
+        type __Value = <$cvar as $crate::ConstVariable>::Value;
         $crate::GetAction::<$cvar, _>::new(move |$var: __Value| { $crate::ctx!($($rem)*) })
     }};
     ($action:expr; $($rem:tt)*) => {{

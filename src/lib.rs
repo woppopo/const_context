@@ -180,6 +180,7 @@ impl<T: Action<VariableListEnd>> StartEvaluation for T {
 pub struct BindAction<PreviousAction, ActionConstructor>(PreviousAction, ActionConstructor);
 
 impl<PreviousAction, ActionConstructor> BindAction<PreviousAction, ActionConstructor> {
+    #[inline(always)]
     pub const fn new(prev: PreviousAction, constructor: ActionConstructor) -> Self {
         Self(prev, constructor)
     }
@@ -195,6 +196,8 @@ where
 {
     type OutputVars = NextAction::OutputVars;
     type Output = NextAction::Output;
+
+    #[inline(always)]
     fn eval(self) -> Self::Output {
         let Self(action, constructor) = self;
         let output = action.eval();
@@ -205,6 +208,7 @@ where
 pub struct ReturnAction<T>(T);
 
 impl<T> ReturnAction<T> {
+    #[inline(always)]
     pub const fn new(value: T) -> Self {
         Self(value)
     }
@@ -216,6 +220,8 @@ where
 {
     type OutputVars = Input;
     type Output = T;
+
+    #[inline(always)]
     fn eval(self) -> Self::Output {
         self.0
     }
@@ -224,6 +230,7 @@ where
 pub struct GetAction<Variable, ActionConstructor>(PhantomData<Variable>, ActionConstructor);
 
 impl<Variable, ActionConstructor> GetAction<Variable, ActionConstructor> {
+    #[inline(always)]
     pub const fn new(constructor: ActionConstructor) -> Self {
         Self(PhantomData, constructor)
     }
@@ -239,6 +246,8 @@ where
 {
     type OutputVars = NextAction::OutputVars;
     type Output = NextAction::Output;
+
+    #[inline(always)]
     fn eval(self) -> Self::Output {
         let Self(_, constructor) = self;
         let got = const { find_variable::<Variable::Key, Variable::Value, Input>() };
@@ -252,6 +261,7 @@ pub struct AssignAction<Variable, const VALUE: ConstValue, NextAction>(
 );
 
 impl<Variable, const VALUE: ConstValue, NextAction> AssignAction<Variable, VALUE, NextAction> {
+    #[inline(always)]
     pub const fn new(next: NextAction) -> Self {
         Self(PhantomData, next)
     }
@@ -266,6 +276,8 @@ where
 {
     type OutputVars = NextAction::OutputVars;
     type Output = NextAction::Output;
+
+    #[inline(always)]
     fn eval(self) -> Self::Output {
         let Self(_, action) = self;
         action.eval()
@@ -326,6 +338,8 @@ macro_rules! ctx {
         {
             type OutputVars = NextAction::OutputVars;
             type Output = NextAction::Output;
+
+            #[inline(always)]
             fn eval(self) -> Self::Output {
                 let Self(next) = self;
                 next.eval()

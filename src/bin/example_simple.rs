@@ -18,7 +18,7 @@ fn main() {
         pure (v1 + v2 + v3)
     };
 
-    println!("{}", action.start_eval());
+    println!("{}", action.start_eval()); // 100
 
     let action = ctx! {
         const Var1 = 6;
@@ -27,5 +27,5 @@ fn main() {
         get Var3
     };
 
-    println!("{}", action.start_eval());
+    println!("{}", action.start_eval()); // 42
 }

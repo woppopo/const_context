@@ -146,19 +146,16 @@ impl<T: Action<VariableListEnd>> StartEvaluation for T {
     }
 }
 
-pub struct ConstContextBindAction<PreviousAction, ActionConstructor>(
-    PreviousAction,
-    ActionConstructor,
-);
+pub struct BindAction<PreviousAction, ActionConstructor>(PreviousAction, ActionConstructor);
 
-impl<PreviousAction, ActionConstructor> ConstContextBindAction<PreviousAction, ActionConstructor> {
+impl<PreviousAction, ActionConstructor> BindAction<PreviousAction, ActionConstructor> {
     pub const fn new(prev: PreviousAction, constructor: ActionConstructor) -> Self {
         Self(prev, constructor)
     }
 }
 
 impl<Input, PreviousAction, ActionConstructor, NextAction> Action<Input>
-    for ConstContextBindAction<PreviousAction, ActionConstructor>
+    for BindAction<PreviousAction, ActionConstructor>
 where
     Input: VariableList,
     PreviousAction: Action<Input>,
@@ -174,15 +171,15 @@ where
     }
 }
 
-pub struct ConstContextReturnAction<T>(T);
+pub struct ReturnAction<T>(T);
 
-impl<T> ConstContextReturnAction<T> {
+impl<T> ReturnAction<T> {
     pub const fn new(value: T) -> Self {
         Self(value)
     }
 }
 
-impl<Input, T> Action<Input> for ConstContextReturnAction<T>
+impl<Input, T> Action<Input> for ReturnAction<T>
 where
     Input: VariableList,
 {
@@ -193,19 +190,16 @@ where
     }
 }
 
-pub struct ConstContextGetAction<Variable, ActionConstructor>(
-    PhantomData<Variable>,
-    ActionConstructor,
-);
+pub struct GetAction<Variable, ActionConstructor>(PhantomData<Variable>, ActionConstructor);
 
-impl<Variable, ActionConstructor> ConstContextGetAction<Variable, ActionConstructor> {
+impl<Variable, ActionConstructor> GetAction<Variable, ActionConstructor> {
     pub const fn new(constructor: ActionConstructor) -> Self {
         Self(PhantomData, constructor)
     }
 }
 
 impl<Input, Variable, ActionConstructor, NextAction> Action<Input>
-    for ConstContextGetAction<Variable, ActionConstructor>
+    for GetAction<Variable, ActionConstructor>
 where
     Input: VariableList,
     Variable: ConstVariable,
@@ -221,21 +215,19 @@ where
     }
 }
 
-pub struct ConstContextAssignAction<Variable, const VALUE: ConstValue, NextAction>(
+pub struct AssignAction<Variable, const VALUE: ConstValue, NextAction>(
     PhantomData<Variable>,
     NextAction,
 );
 
-impl<Variable, const VALUE: ConstValue, NextAction>
-    ConstContextAssignAction<Variable, VALUE, NextAction>
-{
+impl<Variable, const VALUE: ConstValue, NextAction> AssignAction<Variable, VALUE, NextAction> {
     pub const fn new(next: NextAction) -> Self {
         Self(PhantomData, next)
     }
 }
 
 impl<Input, Variable, const VALUE: ConstValue, NextAction> Action<Input>
-    for ConstContextAssignAction<Variable, VALUE, NextAction>
+    for AssignAction<Variable, VALUE, NextAction>
 where
     Input: VariableList,
     Variable: ConstVariable,
@@ -252,13 +244,13 @@ where
 #[macro_export]
 macro_rules! ctx {
     () => {{
-        $crate::ConstContextReturnAction::new(())
+        $crate::ReturnAction::new(())
     }};
     (pure $e:expr) => {{
-        $crate::ConstContextReturnAction::new($e)
+        $crate::ReturnAction::new($e)
     }};
     (get $cvar:ty) => {{
-        $crate::ConstContextGetAction::<$cvar, _>::new($crate::ConstContextReturnAction::new)
+        $crate::GetAction::<$cvar, _>::new($crate::ReturnAction::new)
     }};
     ($action:expr) => {{
         $action
@@ -273,20 +265,20 @@ macro_rules! ctx {
     }};
     (const $cvar:ty = $e:expr; $($rem:tt)*) => {{
         type __Value = <$cvar as $crate::ConstVariable>::Value;
-        $crate::ConstContextAssignAction::<$cvar, { $crate::ConstValue::new::<__Value>($e) }, _>::new({ $crate::ctx!($($rem)*) })
+        $crate::AssignAction::<$cvar, { $crate::ConstValue::new::<__Value>($e) }, _>::new({ $crate::ctx!($($rem)*) })
     }};
     (_ <= $action:expr; $($rem:tt)* ) => {{
-        $crate::ConstContextBindAction::new($action, move |_| { $crate::ctx!($($rem)*) })
+        $crate::BindAction::new($action, move |_| { $crate::ctx!($($rem)*) })
     }};
     ($var:ident <= $action:expr; $($rem:tt)* ) => {{
-        $crate::ConstContextBindAction::new($action, move |$var| { $crate::ctx!($($rem)*) })
+        $crate::BindAction::new($action, move |$var| { $crate::ctx!($($rem)*) })
     }};
     ($var:ident <= get $cvar:ty; $($rem:tt)* ) => {{
         type __Value = <$cvar as ConstVariable>::Value;
-        $crate::ConstContextGetAction::<$cvar, _>::new(move |$var: __Value| { $crate::ctx!($($rem)*) })
+        $crate::GetAction::<$cvar, _>::new(move |$var: __Value| { $crate::ctx!($($rem)*) })
     }};
     ($action:expr; $($rem:tt)*) => {{
-        $crate::ConstContextBindAction::new($action, move |_| { $crate::ctx!($($rem)*) })
+        $crate::BindAction::new($action, move |_| { $crate::ctx!($($rem)*) })
     }};
 }
 

@@ -359,8 +359,8 @@ fn test() {
     };
 
     let action = ctx! {
-        const Var = 40;
-        const Var = (a + 50) where a = Var;
+        const Var = 45;
+        const Var = (a + b) where a = Var, b = Var;
         get Var
     };
 

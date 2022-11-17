@@ -295,21 +295,29 @@ macro_rules! ctx {
         $crate::ctx! { $($rem)* }
     }};
     (const $cvar:ty = $e:expr; $($rem:tt)*) => {{
+        #[doc(hidden)]
         type __Value = <$cvar as $crate::ConstVariable>::Value;
         $crate::AssignAction::<$cvar, { $crate::ConstValue::new::<__Value>($e) }, _>::new({ $crate::ctx!($($rem)*) })
     }};
     (const $cvar:ty = ($e:expr) where $($id:ident = $var:ty),*; $($rem:tt)*) => {{
+        #[doc(hidden)]
         type __Key = <$cvar as $crate::ConstVariable>::Key;
+
+
+        #[doc(hidden)]
         type __Value = <$cvar as $crate::ConstVariable>::Value;
 
+        #[doc(hidden)]
         struct __CustomAction<NextAction>(NextAction);
 
+        #[doc(hidden)]
         #[allow(non_camel_case_types)]
         const fn __construct_const_value<Input: $crate::VariableList, $($id : $crate::ConstVariable<Value = <$var as ConstVariable>::Value>,)*>() -> ConstValue {
             $(let $id: $id::Value = $crate::find_variable::<$id::Key, $id::Value, Input>();)*
             ConstValue::new::<__Value>($e)
         }
 
+        #[doc(hidden)]
         impl<Input, NextAction> $crate::Action<Input>
             for __CustomAction<NextAction>
         where
@@ -333,6 +341,7 @@ macro_rules! ctx {
         $crate::BindAction::new($action, move |$var| { $crate::ctx!($($rem)*) })
     }};
     ($var:ident <= get $cvar:ty; $($rem:tt)* ) => {{
+        #[doc(hidden)]
         type __Value = <$cvar as ConstVariable>::Value;
         $crate::GetAction::<$cvar, _>::new(move |$var: __Value| { $crate::ctx!($($rem)*) })
     }};

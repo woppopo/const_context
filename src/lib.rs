@@ -59,6 +59,8 @@ pub struct VariableListEnd;
 
 pub struct VariableListHas<Key, const VALUE: ConstValue, Next>(PhantomData<(Key, Next)>);
 
+pub struct VariableListRemoved<Key, Next>(PhantomData<(Key, Next)>);
+
 pub trait VariableList: VariableListElement {
     type Next: VariableList;
 }
@@ -66,11 +68,13 @@ pub trait VariableList: VariableListElement {
 pub trait VariableListElement {
     type Key: 'static;
     const VALUE: Option<ConstValue>;
+    const END: bool;
 }
 
 impl VariableListElement for VariableListEnd {
     type Key = ();
     const VALUE: Option<ConstValue> = None;
+    const END: bool = true;
 }
 
 impl VariableList for VariableListEnd {
@@ -82,11 +86,22 @@ impl<Key: 'static, const VAL: ConstValue, Next: VariableList> VariableListElemen
 {
     type Key = Key;
     const VALUE: Option<ConstValue> = Some(VAL);
+    const END: bool = false;
 }
 
 impl<Key: 'static, const VAL: ConstValue, Next: VariableList> VariableList
     for VariableListHas<Key, VAL, Next>
 {
+    type Next = Next;
+}
+
+impl<Key: 'static, Next: VariableList> VariableListElement for VariableListRemoved<Key, Next> {
+    type Key = Key;
+    const VALUE: Option<ConstValue> = None;
+    const END: bool = false;
+}
+
+impl<Key: 'static, Next: VariableList> VariableList for VariableListRemoved<Key, Next> {
     type Next = Next;
 }
 
@@ -124,15 +139,17 @@ where
     Key: 'static,
     Value: 'static,
 {
-    match List::VALUE {
-        Some(value) => {
-            if eq_typeid(TypeId::of::<Key>(), TypeId::of::<List::Key>()) {
-                value.into_inner()
-            } else {
-                find_variable::<Key, Value, List::Next>()
-            }
+    if List::END {
+        panic!("{}", error_not_found::<Key>());
+    }
+
+    if eq_typeid(TypeId::of::<Key>(), TypeId::of::<List::Key>()) {
+        match List::VALUE {
+            Some(value) => value.into_inner(),
+            None => panic!("{}", error_not_found::<Key>()),
         }
-        None => panic!("{}", error_not_found::<Key>()),
+    } else {
+        find_variable::<Key, Value, List::Next>()
     }
 }
 

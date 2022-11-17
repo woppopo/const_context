@@ -9,6 +9,7 @@
 #![feature(const_type_id)]
 #![feature(const_type_name)]
 #![feature(core_intrinsics)]
+#![feature(generic_const_exprs)]
 #![feature(inline_const)]
 
 use core::any::TypeId;
@@ -297,6 +298,34 @@ macro_rules! ctx {
         type __Value = <$cvar as $crate::ConstVariable>::Value;
         $crate::AssignAction::<$cvar, { $crate::ConstValue::new::<__Value>($e) }, _>::new({ $crate::ctx!($($rem)*) })
     }};
+    (const $cvar:ty = ($e:expr) where $($id:ident = $var:ty),*; $($rem:tt)*) => {{
+        type __Key = <$cvar as $crate::ConstVariable>::Key;
+        type __Value = <$cvar as $crate::ConstVariable>::Value;
+
+        struct __CustomAction<NextAction>(NextAction);
+
+        #[allow(non_camel_case_types)]
+        const fn __construct_const_value<Input: $crate::VariableList, $($id : $crate::ConstVariable<Value = <$var as ConstVariable>::Value>,)*>() -> ConstValue {
+            $(let $id: $id::Value = $crate::find_variable::<$id::Key, $id::Value, Input>();)*
+            ConstValue::new::<__Value>($e)
+        }
+
+        impl<Input, NextAction> $crate::Action<Input>
+            for __CustomAction<NextAction>
+        where
+            Input: $crate::VariableList,
+            NextAction: $crate::Action<$crate::VariableListHas<__Key, { __construct_const_value::<Input, $($var,)*>() }, Input>>,
+        {
+            type OutputVars = NextAction::OutputVars;
+            type Output = NextAction::Output;
+            fn eval(self) -> Self::Output {
+                let Self(next) = self;
+                next.eval()
+            }
+        }
+
+        __CustomAction({ $crate::ctx!($($rem)*) })
+    }};
     (_ <= $action:expr; $($rem:tt)* ) => {{
         $crate::BindAction::new($action, move |_| { $crate::ctx!($($rem)*) })
     }};
@@ -330,7 +359,8 @@ fn test() {
     };
 
     let action = ctx! {
-        const Var = 90;
+        const Var = 40;
+        const Var = (a + 50) where a = Var;
         get Var
     };
 

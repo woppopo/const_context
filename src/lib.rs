@@ -28,6 +28,23 @@ const fn into_bytes<T>(value: T) -> &'static mut [u8] {
     }
 }
 
+const fn str_concat(s1: &'static str, s2: &'static str) -> &'static str {
+    let s1 = s1.as_bytes();
+    let s2 = s2.as_bytes();
+    let len = s1.len() + s2.len();
+
+    unsafe {
+        let ptr = const_allocate(
+            core::mem::size_of::<u8>() * len,
+            core::mem::align_of::<u8>(),
+        );
+
+        core::ptr::copy(s1.as_ptr(), ptr, s1.len());
+        core::ptr::copy(s2.as_ptr(), ptr.add(s1.len()), s2.len());
+        core::str::from_utf8_unchecked(core::slice::from_raw_parts(ptr.cast(), len))
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ConstValue {
     ty: TypeId,
@@ -103,23 +120,6 @@ impl<Key: 'static, Next: VariableList> VariableListElement for VariableListRemov
 
 impl<Key: 'static, Next: VariableList> VariableList for VariableListRemoved<Key, Next> {
     type Next = Next;
-}
-
-const fn str_concat(s1: &'static str, s2: &'static str) -> &'static str {
-    let s1 = s1.as_bytes();
-    let s2 = s2.as_bytes();
-    let len = s1.len() + s2.len();
-
-    unsafe {
-        let ptr = const_allocate(
-            core::mem::size_of::<u8>() * len,
-            core::mem::align_of::<u8>(),
-        );
-
-        core::ptr::copy(s1.as_ptr(), ptr, s1.len());
-        core::ptr::copy(s2.as_ptr(), ptr.add(s1.len()), s2.len());
-        core::str::from_utf8_unchecked(core::slice::from_raw_parts(ptr.cast(), len))
-    }
 }
 
 const fn error_not_found<Key>() -> &'static str {
@@ -366,7 +366,10 @@ macro_rules! ctx {
 
         #[doc(hidden)]
         #[allow(non_camel_case_types)]
-        const fn __construct_const_value<Input: $crate::VariableList, $($id : $crate::ConstVariable<Value = <$var as ConstVariable>::Value>,)*>() -> ConstValue {
+        const fn __construct_const_value<
+            Input: $crate::VariableList,
+            $($id : $crate::ConstVariable<Value = <$var as ConstVariable>::Value>,)*
+        >() -> ConstValue {
             $(let $id: $id::Value = $crate::find_variable::<$id::Key, $id::Value, Input>();)*
             ConstValue::new::<__Value>($e)
         }

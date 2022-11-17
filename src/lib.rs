@@ -53,30 +53,56 @@ impl ConstValue {
     }
 }
 
-pub struct VarListEnd;
+pub struct VariableListEnd;
 
-pub struct VarList<Key, const VAL: ConstValue, Next>(PhantomData<(Key, Next)>);
+pub struct VariableListHas<Key, const VALUE: ConstValue, Next>(PhantomData<(Key, Next)>);
 
-pub trait Search<Key, Value> {
-    const FOUND: Option<Value>;
+pub trait VariableList: VariableListElement {
+    type Next: VariableList;
 }
 
-impl<Key, Value> Search<Key, Value> for VarListEnd {
-    const FOUND: Option<Value> = None;
+pub trait VariableListElement {
+    type Key: 'static;
+    const VALUE: Option<ConstValue>;
 }
 
-impl<Key, Value, Hold, const VAL: ConstValue, Next: Search<Key, Value>> Search<Key, Value>
-    for VarList<Hold, VAL, Next>
+impl VariableListElement for VariableListEnd {
+    type Key = ();
+    const VALUE: Option<ConstValue> = None;
+}
+
+impl VariableList for VariableListEnd {
+    type Next = VariableListEnd;
+}
+
+impl<Key: 'static, const VAL: ConstValue, Next: VariableList> VariableListElement
+    for VariableListHas<Key, VAL, Next>
+{
+    type Key = Key;
+    const VALUE: Option<ConstValue> = Some(VAL);
+}
+
+impl<Key: 'static, const VAL: ConstValue, Next: VariableList> VariableList
+    for VariableListHas<Key, VAL, Next>
+{
+    type Next = Next;
+}
+
+const fn find_variable<Key, Value, List: VariableList>() -> Value
 where
     Key: 'static,
     Value: 'static,
-    Hold: 'static,
 {
-    const FOUND: Option<Value> = if eq_typeid(TypeId::of::<Key>(), TypeId::of::<Hold>()) {
-        Some(VAL.into_inner())
-    } else {
-        Next::FOUND
-    };
+    match List::VALUE {
+        Some(value) => {
+            if eq_typeid(TypeId::of::<Key>(), TypeId::of::<List::Key>()) {
+                value.into_inner()
+            } else {
+                find_variable::<Key, Value, List::Next>()
+            }
+        }
+        None => panic!(),
+    }
 }
 
 pub trait ConstVariable {
@@ -98,8 +124,11 @@ impl<V: ConstVariable> ConstVariable for &V {
     type Value = V::Value;
 }
 
-pub trait Action<Vars> {
-    type OutputVars;
+pub trait Action<Input>
+where
+    Input: VariableList,
+{
+    type OutputVars: VariableList;
     type Output;
     fn eval(self) -> Self::Output;
 }
@@ -109,7 +138,7 @@ pub trait StartEvaluation {
     fn start_eval(self) -> Self::Output;
 }
 
-impl<T: Action<VarListEnd>> StartEvaluation for T {
+impl<T: Action<VariableListEnd>> StartEvaluation for T {
     type Output = T::Output;
 
     fn start_eval(self) -> Self::Output {
@@ -131,6 +160,7 @@ impl<PreviousAction, ActionConstructor> ConstContextBindAction<PreviousAction, A
 impl<Input, PreviousAction, ActionConstructor, NextAction> Action<Input>
     for ConstContextBindAction<PreviousAction, ActionConstructor>
 where
+    Input: VariableList,
     PreviousAction: Action<Input>,
     ActionConstructor: FnOnce(PreviousAction::Output) -> NextAction,
     NextAction: Action<PreviousAction::OutputVars>,
@@ -152,7 +182,10 @@ impl<T> ConstContextReturnAction<T> {
     }
 }
 
-impl<Input, T> Action<Input> for ConstContextReturnAction<T> {
+impl<Input, T> Action<Input> for ConstContextReturnAction<T>
+where
+    Input: VariableList,
+{
     type OutputVars = Input;
     type Output = T;
     fn eval(self) -> Self::Output {
@@ -174,7 +207,7 @@ impl<Variable, ActionConstructor> ConstContextGetAction<Variable, ActionConstruc
 impl<Input, Variable, ActionConstructor, NextAction> Action<Input>
     for ConstContextGetAction<Variable, ActionConstructor>
 where
-    Input: Search<Variable::Key, Variable::Value>,
+    Input: VariableList,
     Variable: ConstVariable,
     ActionConstructor: FnOnce(Variable::Value) -> NextAction,
     NextAction: Action<Input>,
@@ -183,7 +216,7 @@ where
     type Output = NextAction::Output;
     fn eval(self) -> Self::Output {
         let Self(_, constructor) = self;
-        let got = const { Input::FOUND.unwrap() };
+        let got = const { find_variable::<Variable::Key, Variable::Value, Input>() };
         constructor(got).eval()
     }
 }
@@ -204,8 +237,9 @@ impl<Variable, const VALUE: ConstValue, NextAction>
 impl<Input, Variable, const VALUE: ConstValue, NextAction> Action<Input>
     for ConstContextAssignAction<Variable, VALUE, NextAction>
 where
+    Input: VariableList,
     Variable: ConstVariable,
-    NextAction: Action<VarList<Variable::Key, VALUE, Input>>,
+    NextAction: Action<VariableListHas<Variable::Key, VALUE, Input>>,
 {
     type OutputVars = NextAction::OutputVars;
     type Output = NextAction::Output;
@@ -258,11 +292,11 @@ macro_rules! ctx {
 fn test() {
     type Var = ((), u32);
 
-    let f = |n: u32| {
+    fn f<Vars: VariableList>(n: u32) -> impl Action<Vars, Output = u32> {
         ctx! {
             pure n
         }
-    };
+    }
 
     let push90 = || {
         ctx! {

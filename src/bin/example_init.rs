@@ -1,14 +1,13 @@
 #![feature(decl_macro)]
 
-use const_context::{ctx, ConstVariable, StartEvaluation};
+use const_context::{ctx, Action, ConstVariable, StartEvaluation, VariableList};
 
 mod need_init {
     use super::*;
 
     static mut VALUE: Option<u32> = None;
 
-    // TODO: How to remove `pub` visibility?
-    pub fn initialize_value() {
+    fn initialize_value() {
         unsafe { VALUE = Some(42) }
     }
 
@@ -30,12 +29,12 @@ mod need_init {
         type Value = Self;
     }
 
-    pub macro initialize() {{
+    pub fn initialize<Vars: VariableList>() -> impl Action<Vars, Output = ()> {
         ctx! {
             let _ = initialize_value();
             const Functions = Functions(());
         }
-    }}
+    }
 }
 
 fn main() {
@@ -45,7 +44,7 @@ fn main() {
     //let functions = Functions(());
 
     let action = ctx! {
-        need_init::initialize!();
+        need_init::initialize();
         funcs <= get Functions;
         let _ = println!("{}", funcs.foo());
     };

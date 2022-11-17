@@ -315,7 +315,6 @@ macro_rules! ctx {
         #[doc(hidden)]
         type __Key = <$cvar as $crate::ConstVariable>::Key;
 
-
         #[doc(hidden)]
         type __Value = <$cvar as $crate::ConstVariable>::Value;
 

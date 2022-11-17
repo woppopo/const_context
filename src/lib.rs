@@ -105,32 +105,29 @@ impl<Key: 'static, Next: VariableList> VariableList for VariableListRemoved<Key,
     type Next = Next;
 }
 
-const fn error_not_found<Key>() -> &'static str {
-    let msg1 = "The key `".as_bytes();
-    let msg2 = "` is not found in current context.".as_bytes();
-    let type_name = core::any::type_name::<Key>().as_bytes();
+const fn str_concat(s1: &'static str, s2: &'static str) -> &'static str {
+    let s1 = s1.as_bytes();
+    let s2 = s2.as_bytes();
+    let len = s1.len() + s2.len();
 
     unsafe {
-        let len = msg1.len() + type_name.len() + msg2.len();
         let ptr = const_allocate(
             core::mem::size_of::<u8>() * len,
             core::mem::align_of::<u8>(),
         );
 
-        let mut offset = 0;
-
-        core::ptr::copy(msg1.as_ptr(), ptr.add(offset), msg1.len());
-        offset += msg1.len();
-
-        core::ptr::copy(type_name.as_ptr(), ptr.add(offset), type_name.len());
-        offset += type_name.len();
-
-        core::ptr::copy(msg2.as_ptr(), ptr.add(offset), msg2.len());
-        offset += msg2.len();
-
-        assert!(len == offset);
-        core::str::from_utf8_unchecked(core::slice::from_raw_parts(ptr.cast(), offset))
+        core::ptr::copy(s1.as_ptr(), ptr, s1.len());
+        core::ptr::copy(s2.as_ptr(), ptr.add(s1.len()), s2.len());
+        core::str::from_utf8_unchecked(core::slice::from_raw_parts(ptr.cast(), len))
     }
+}
+
+const fn error_not_found<Key>() -> &'static str {
+    let type_name = core::any::type_name::<Key>();
+    str_concat(
+        str_concat("The key `", type_name),
+        "` is not found in current context.",
+    )
 }
 
 #[track_caller]

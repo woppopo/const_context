@@ -205,6 +205,31 @@ where
     }
 }
 
+pub struct ClosureAction<F>(F);
+
+impl<F> ClosureAction<F> {
+    #[inline(always)]
+    pub const fn new(closure: F) -> Self {
+        Self(closure)
+    }
+}
+
+impl<Input, F, NextAction> Action<Input> for ClosureAction<F>
+where
+    Input: VariableList,
+    F: FnOnce() -> NextAction,
+    NextAction: Action<Input>,
+{
+    type OutputVars = NextAction::OutputVars;
+    type Output = NextAction::Output;
+
+    #[inline(always)]
+    fn eval(self) -> Self::Output {
+        let Self(closure) = self;
+        closure().eval()
+    }
+}
+
 pub struct ReturnAction<T>(T);
 
 impl<T> ReturnAction<T> {
@@ -299,12 +324,16 @@ macro_rules! ctx {
         $action
     }};
     (let _ = $e:expr; $($rem:tt)*) => {{
-        let _ = $e;
-        $crate::ctx! { $($rem)* }
+        $crate::ClosureAction::new(move || {
+            let _ = $e;
+            $crate::ctx! { $($rem)* }
+        })
     }};
     (let $var:ident = $e:expr; $($rem:tt)*) => {{
-        let $var = $e;
-        $crate::ctx! { $($rem)* }
+        $crate::ClosureAction::new(move || {
+            let $var = $e;
+            $crate::ctx! { $($rem)* }
+        })
     }};
     (const $cvar:ty = $e:expr; $($rem:tt)*) => {{
         #[doc(hidden)]

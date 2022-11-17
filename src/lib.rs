@@ -275,6 +275,9 @@ macro_rules! ctx {
         type __Value = <$cvar as $crate::ConstVariable>::Value;
         $crate::ConstContextAssignAction::<$cvar, { $crate::ConstValue::new::<__Value>($e) }, _>::new({ $crate::ctx!($($rem)*) })
     }};
+    (_ <= $action:expr; $($rem:tt)* ) => {{
+        $crate::ConstContextBindAction::new($action, move |_| { $crate::ctx!($($rem)*) })
+    }};
     ($var:ident <= $action:expr; $($rem:tt)* ) => {{
         $crate::ConstContextBindAction::new($action, move |$var| { $crate::ctx!($($rem)*) })
     }};

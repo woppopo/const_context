@@ -1,5 +1,3 @@
-#![feature(decl_macro)]
-
 use const_context::{ctx, Action, ConstVariable, StartEvaluation, VariableList};
 
 mod need_init {

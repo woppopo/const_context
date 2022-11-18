@@ -11,12 +11,15 @@
 #![feature(core_intrinsics)]
 #![feature(generic_const_exprs)]
 #![feature(inline_const)]
+#![feature(never_type)]
 
 use core::any::TypeId;
 use core::intrinsics::const_allocate;
 use core::marker::PhantomData;
 
-const fn eq_typeid(a: TypeId, b: TypeId) -> bool {
+const fn type_eq<A: 'static, B: 'static>() -> bool {
+    let a = TypeId::of::<A>();
+    let b = TypeId::of::<B>();
     unsafe { core::mem::transmute::<_, u64>(a) == core::mem::transmute::<_, u64>(b) }
 }
 
@@ -46,10 +49,7 @@ const fn str_concat(s1: &'static str, s2: &'static str) -> &'static str {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct ConstValue {
-    ty: TypeId,
-    bytes: &'static [u8],
-}
+pub struct ConstValue(&'static [u8]);
 
 impl ConstValue {
     pub const fn new<T>(value: T) -> Self
@@ -57,24 +57,23 @@ impl ConstValue {
         T: 'static,
         T: Eq,
     {
-        Self {
-            ty: TypeId::of::<T>(),
-            bytes: into_bytes(value),
-        }
+        Self(into_bytes(value))
     }
 
-    pub const fn into_inner<T>(self) -> T
+    pub const fn with_type<T>(self) -> T
     where
         T: 'static,
     {
-        assert!(eq_typeid(TypeId::of::<T>(), self.ty));
-        unsafe { core::ptr::read(self.bytes.as_ptr().cast()) }
+        let Self(bytes) = self;
+        unsafe { core::ptr::read(bytes.as_ptr().cast()) }
     }
 }
 
 pub struct VariableListEnd;
 
-pub struct VariableListHas<Key, const VALUE: ConstValue, Next>(PhantomData<(Key, Next)>);
+pub struct VariableListHas<Key, Value, const VALUE: ConstValue, Next>(
+    PhantomData<(Key, Value, Next)>,
+);
 
 pub struct VariableListRemoved<Key, Next>(PhantomData<(Key, Next)>);
 
@@ -84,12 +83,14 @@ pub trait VariableList: VariableListElement {
 
 pub trait VariableListElement {
     type Key: 'static;
+    type Value: 'static;
     const VALUE: Option<ConstValue>;
     const END: bool;
 }
 
 impl VariableListElement for VariableListEnd {
-    type Key = ();
+    type Key = !;
+    type Value = !;
     const VALUE: Option<ConstValue> = None;
     const END: bool = true;
 }
@@ -98,22 +99,24 @@ impl VariableList for VariableListEnd {
     type Next = VariableListEnd;
 }
 
-impl<Key: 'static, const VAL: ConstValue, Next: VariableList> VariableListElement
-    for VariableListHas<Key, VAL, Next>
+impl<Key: 'static, Value: 'static, const VAL: ConstValue, Next: VariableList> VariableListElement
+    for VariableListHas<Key, Value, VAL, Next>
 {
     type Key = Key;
+    type Value = Value;
     const VALUE: Option<ConstValue> = Some(VAL);
     const END: bool = false;
 }
 
-impl<Key: 'static, const VAL: ConstValue, Next: VariableList> VariableList
-    for VariableListHas<Key, VAL, Next>
+impl<Key: 'static, Value: 'static, const VAL: ConstValue, Next: VariableList> VariableList
+    for VariableListHas<Key, Value, VAL, Next>
 {
     type Next = Next;
 }
 
 impl<Key: 'static, Next: VariableList> VariableListElement for VariableListRemoved<Key, Next> {
     type Key = Key;
+    type Value = !;
     const VALUE: Option<ConstValue> = None;
     const END: bool = false;
 }
@@ -130,6 +133,15 @@ const fn error_not_found<Key>() -> &'static str {
     )
 }
 
+const fn error_unexpected_type<Expected, Value>() -> &'static str {
+    let type_name_expect = core::any::type_name::<Expected>();
+    let type_name_value = core::any::type_name::<Value>();
+    str_concat(
+        str_concat("Mismatched types: expected `", type_name_expect),
+        str_concat("`, found `", str_concat(type_name_value, "`.")),
+    )
+}
+
 #[track_caller]
 pub const fn find_variable<Key, Value, List: VariableList>() -> Value
 where
@@ -140,11 +152,14 @@ where
         panic!("{}", error_not_found::<Key>());
     }
 
-    if eq_typeid(TypeId::of::<Key>(), TypeId::of::<List::Key>()) {
-        match List::VALUE {
-            Some(value) => value.into_inner(),
-            None => panic!("{}", error_not_found::<Key>()),
-        }
+    if type_eq::<Key, List::Key>() {
+        let value = List::VALUE.expect(error_not_found::<Key>());
+        assert!(
+            type_eq::<Value, List::Value>(),
+            "{}",
+            error_unexpected_type::<Value, List::Value>()
+        );
+        value.with_type()
     } else {
         find_variable::<Key, Value, List::Next>()
     }
@@ -312,7 +327,7 @@ impl<Input, Variable, const VALUE: ConstValue, NextAction> Action<Input>
 where
     Input: VariableList,
     Variable: ConstVariable,
-    NextAction: Action<VariableListHas<Variable::Key, VALUE, Input>>,
+    NextAction: Action<VariableListHas<Variable::Key, Variable::Value, VALUE, Input>>,
 {
     type OutputVars = NextAction::OutputVars;
     type Output = NextAction::Output;
@@ -379,7 +394,7 @@ macro_rules! ctx {
             for __CustomAssignAction<NextAction>
         where
             Input: $crate::VariableList,
-            NextAction: $crate::Action<$crate::VariableListHas<__Key, { __construct_const_value::<Input>() }, Input>>,
+            NextAction: $crate::Action<$crate::VariableListHas<__Key, __Value, { __construct_const_value::<Input>() }, Input>>,
         {
             type OutputVars = NextAction::OutputVars;
             type Output = NextAction::Output;

@@ -186,6 +186,7 @@ pub trait StartEvaluation {
 impl<T: Action<VariableListEnd>> StartEvaluation for T {
     type Output = T::Output;
 
+    #[inline(always)]
     fn start_eval(self) -> Self::Output {
         self.eval()
     }

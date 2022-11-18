@@ -366,11 +366,11 @@ macro_rules! ctx {
 
         #[doc(hidden)]
         #[allow(non_camel_case_types)]
-        const fn __construct_const_value<
-            Input: $crate::VariableList,
-            $($id : $crate::ConstVariable<Value = <$var as $crate::ConstVariable>::Value>,)*
-        >() -> $crate::ConstValue {
-            $(let $id: $id::Value = $crate::find_variable::<$id::Key, $id::Value, Input>();)*
+        const fn __construct_const_value<Input: $crate::VariableList>() -> $crate::ConstValue {
+            $(let $id = $crate::find_variable::<
+                <$var as $crate::ConstVariable>::Key,
+                <$var as $crate::ConstVariable>::Value,
+                Input>();)*
             $crate::ConstValue::new::<__Value>($e)
         }
 
@@ -379,7 +379,7 @@ macro_rules! ctx {
             for __CustomAction<NextAction>
         where
             Input: $crate::VariableList,
-            NextAction: $crate::Action<$crate::VariableListHas<__Key, { __construct_const_value::<Input, $($var,)*>() }, Input>>,
+            NextAction: $crate::Action<$crate::VariableListHas<__Key, { __construct_const_value::<Input>() }, Input>>,
         {
             type OutputVars = NextAction::OutputVars;
             type Output = NextAction::Output;

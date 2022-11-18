@@ -365,7 +365,6 @@ macro_rules! ctx {
         struct __CustomAction<NextAction>(NextAction);
 
         #[doc(hidden)]
-        #[allow(non_camel_case_types)]
         const fn __construct_const_value<Input: $crate::VariableList>() -> $crate::ConstValue {
             $(let $id = $crate::find_variable::<
                 <$var as $crate::ConstVariable>::Key,

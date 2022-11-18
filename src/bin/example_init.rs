@@ -43,7 +43,7 @@ fn main() {
 
     let action = ctx! {
         need_init::initialize();
-        funcs <= get Functions;
+        funcs <- get Functions;
         let _ = println!("{}", funcs.foo());
     };
 

@@ -350,8 +350,16 @@ macro_rules! ctx {
     (get $cvar:ty) => {{
         $crate::GetAction::<$cvar, _>::new($crate::ReturnAction::new)
     }};
-    ($action:expr) => {{
-        $action
+    (_ <- $action:expr; $($rem:tt)* ) => {{
+        $crate::BindAction::new($action, move |_| { $crate::ctx!($($rem)*) })
+    }};
+    ($var:ident <- $action:expr; $($rem:tt)* ) => {{
+        $crate::BindAction::new($action, move |$var| { $crate::ctx!($($rem)*) })
+    }};
+    ($var:ident <- get $cvar:ty; $($rem:tt)* ) => {{
+        #[doc(hidden)]
+        type __Value = <$cvar as $crate::ConstVariable>::Value;
+        $crate::GetAction::<$cvar, _>::new(move |$var: __Value| { $crate::ctx!($($rem)*) })
     }};
     (let _ = $e:expr; $($rem:tt)*) => {{
         $crate::ClosureAction::new(move || {
@@ -408,16 +416,8 @@ macro_rules! ctx {
 
         __CustomAssignAction({ $crate::ctx!($($rem)*) })
     }};
-    (_ <= $action:expr; $($rem:tt)* ) => {{
-        $crate::BindAction::new($action, move |_| { $crate::ctx!($($rem)*) })
-    }};
-    ($var:ident <= $action:expr; $($rem:tt)* ) => {{
-        $crate::BindAction::new($action, move |$var| { $crate::ctx!($($rem)*) })
-    }};
-    ($var:ident <= get $cvar:ty; $($rem:tt)* ) => {{
-        #[doc(hidden)]
-        type __Value = <$cvar as $crate::ConstVariable>::Value;
-        $crate::GetAction::<$cvar, _>::new(move |$var: __Value| { $crate::ctx!($($rem)*) })
+    ($action:expr) => {{
+        $action
     }};
     ($action:expr; $($rem:tt)*) => {{
         $crate::BindAction::new($action, move |_| { $crate::ctx!($($rem)*) })
@@ -448,14 +448,14 @@ fn test() {
     };
 
     let action2 = ctx! {
-        v <= f(42);
+        v <- f(42);
         pure v
     };
 
     let action3 = ctx! {
         push90();
-        v <= f(42);
-        w <= get Var;
+        v <- f(42);
+        w <- get Var;
         pure (v + w)
     };
 

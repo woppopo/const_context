@@ -363,7 +363,7 @@ macro_rules! ctx {
         type __Value = <$cvar as $crate::ConstVariable>::Value;
 
         #[doc(hidden)]
-        struct __CustomAction<NextAction>(NextAction);
+        struct __CustomAssignAction<NextAction>(NextAction);
 
         #[doc(hidden)]
         const fn __construct_const_value<Input: $crate::VariableList>() -> $crate::ConstValue {
@@ -376,7 +376,7 @@ macro_rules! ctx {
 
         #[doc(hidden)]
         impl<Input, NextAction> $crate::Action<Input>
-            for __CustomAction<NextAction>
+            for __CustomAssignAction<NextAction>
         where
             Input: $crate::VariableList,
             NextAction: $crate::Action<$crate::VariableListHas<__Key, { __construct_const_value::<Input>() }, Input>>,
@@ -391,7 +391,7 @@ macro_rules! ctx {
             }
         }
 
-        __CustomAction({ $crate::ctx!($($rem)*) })
+        __CustomAssignAction({ $crate::ctx!($($rem)*) })
     }};
     (_ <= $action:expr; $($rem:tt)* ) => {{
         $crate::BindAction::new($action, move |_| { $crate::ctx!($($rem)*) })

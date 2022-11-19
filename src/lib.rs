@@ -345,7 +345,7 @@ macro_rules! ctx {
     }};
     (let $var:ident = $e:expr; $($rem:tt)*) => {{
         $crate::BindAction::new(
-            $crate::ClosureAction::new(move || $e),
+            $crate::ReturnAction::new(move || $e),
             move |$var| { $crate::ctx!($($rem)*) },
         )
     }};

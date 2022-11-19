@@ -24,10 +24,13 @@ const fn type_eq<A: 'static, B: 'static>() -> bool {
 }
 
 const fn into_bytes<T>(value: T) -> &'static mut [u8] {
+    let size = core::mem::size_of::<T>();
+    let align = core::mem::align_of::<T>();
+
     unsafe {
-        let ptr = const_allocate(core::mem::size_of::<T>(), core::mem::align_of::<T>());
+        let ptr = const_allocate(size, align);
         core::ptr::write(ptr.cast(), value);
-        core::slice::from_raw_parts_mut(ptr.cast(), core::mem::size_of::<T>())
+        core::slice::from_raw_parts_mut(ptr.cast(), size)
     }
 }
 
@@ -41,7 +44,6 @@ const fn str_concat(s1: &'static str, s2: &'static str) -> &'static str {
             core::mem::size_of::<u8>() * len,
             core::mem::align_of::<u8>(),
         );
-
         core::ptr::copy(s1.as_ptr(), ptr, s1.len());
         core::ptr::copy(s2.as_ptr(), ptr.add(s1.len()), s2.len());
         core::str::from_utf8_unchecked(core::slice::from_raw_parts(ptr.cast(), len))
@@ -312,10 +314,7 @@ macro_rules! ctx {
         $crate::ReturnAction::new(move || $e)
     }};
     (get $cvar:ty) => {{
-        $crate::BindAction::new(
-            $crate::GetAction::<$cvar>::new(),
-            move |var| { $crate::ReturnAction::new(move || var) },
-        )
+        $crate::GetAction::<$cvar>::new()
     }};
     (_ <- $action:expr; $($rem:tt)* ) => {{
         $crate::BindAction::new(

@@ -282,61 +282,48 @@ where
     }
 }
 
-pub struct GetAction<Variable, ActionConstructor>(PhantomData<Variable>, ActionConstructor);
+pub struct GetAction<Variable>(PhantomData<Variable>);
 
-impl<Variable, ActionConstructor> GetAction<Variable, ActionConstructor> {
+impl<Variable> GetAction<Variable> {
     #[inline(always)]
-    pub const fn new(constructor: ActionConstructor) -> Self {
-        Self(PhantomData, constructor)
+    pub const fn new() -> Self {
+        Self(PhantomData)
     }
 }
 
-impl<Input, Variable, ActionConstructor, NextAction> Action<Input>
-    for GetAction<Variable, ActionConstructor>
+impl<Input, Variable> Action<Input> for GetAction<Variable>
 where
     Input: VariableList,
     Variable: ConstVariable,
-    ActionConstructor: FnOnce(Variable::Value) -> NextAction,
-    NextAction: Action<Input>,
 {
-    type OutputVars = NextAction::OutputVars;
-    type Output = NextAction::Output;
+    type OutputVars = Input;
+    type Output = Variable::Value;
 
     #[inline(always)]
     fn eval(self) -> Self::Output {
-        let Self(_, constructor) = self;
-        let got = const { find_variable::<Variable::Key, Variable::Value, Input>() };
-        constructor(got).eval()
+        const { find_variable::<Variable::Key, Variable::Value, Input>() }
     }
 }
 
-pub struct AssignAction<Variable, const VALUE: ConstValue, NextAction>(
-    PhantomData<Variable>,
-    NextAction,
-);
+pub struct AssignAction<Variable, const VALUE: ConstValue>(PhantomData<Variable>);
 
-impl<Variable, const VALUE: ConstValue, NextAction> AssignAction<Variable, VALUE, NextAction> {
+impl<Variable, const VALUE: ConstValue> AssignAction<Variable, VALUE> {
     #[inline(always)]
-    pub const fn new(next: NextAction) -> Self {
-        Self(PhantomData, next)
+    pub const fn new() -> Self {
+        Self(PhantomData)
     }
 }
 
-impl<Input, Variable, const VALUE: ConstValue, NextAction> Action<Input>
-    for AssignAction<Variable, VALUE, NextAction>
+impl<Input, Variable, const VALUE: ConstValue> Action<Input> for AssignAction<Variable, VALUE>
 where
     Input: VariableList,
     Variable: ConstVariable,
-    NextAction: Action<VariableListHas<Variable::Key, Variable::Value, VALUE, Input>>,
 {
-    type OutputVars = NextAction::OutputVars;
-    type Output = NextAction::Output;
+    type OutputVars = VariableListHas<Variable::Key, Variable::Value, VALUE, Input>;
+    type Output = ();
 
     #[inline(always)]
-    fn eval(self) -> Self::Output {
-        let Self(_, action) = self;
-        action.eval()
-    }
+    fn eval(self) -> Self::Output {}
 }
 
 #[macro_export]
@@ -348,18 +335,30 @@ macro_rules! ctx {
         $crate::ReturnAction::new($e)
     }};
     (get $cvar:ty) => {{
-        $crate::GetAction::<$cvar, _>::new($crate::ReturnAction::new)
+        $crate::BindAction::new(
+            $crate::GetAction::<$cvar>::new(),
+            $crate::ReturnAction::new,
+        )
     }};
     (_ <- $action:expr; $($rem:tt)* ) => {{
-        $crate::BindAction::new($action, move |_| { $crate::ctx!($($rem)*) })
+        $crate::BindAction::new(
+            $action,
+            move |_| { $crate::ctx!($($rem)*) },
+        )
     }};
     ($var:ident <- $action:expr; $($rem:tt)* ) => {{
-        $crate::BindAction::new($action, move |$var| { $crate::ctx!($($rem)*) })
+        $crate::BindAction::new(
+            $action,
+            move |$var| { $crate::ctx!($($rem)*) },
+        )
     }};
     ($var:ident <- get $cvar:ty; $($rem:tt)* ) => {{
         #[doc(hidden)]
         type __Value = <$cvar as $crate::ConstVariable>::Value;
-        $crate::GetAction::<$cvar, _>::new(move |$var: __Value| { $crate::ctx!($($rem)*) })
+        $crate::BindAction::new(
+            $crate::GetAction::<$cvar>::new(),
+            move |$var: __Value| { $crate::ctx!($($rem)*) },
+        )
     }};
     (let _ = $e:expr; $($rem:tt)*) => {{
         $crate::ClosureAction::new(move || {
@@ -376,7 +375,10 @@ macro_rules! ctx {
     (const $cvar:ty = $e:expr; $($rem:tt)*) => {{
         #[doc(hidden)]
         type __Value = <$cvar as $crate::ConstVariable>::Value;
-        $crate::AssignAction::<$cvar, { $crate::ConstValue::new::<__Value>($e) }, _>::new({ $crate::ctx!($($rem)*) })
+        $crate::BindAction::new(
+            $crate::AssignAction::<$cvar, { $crate::ConstValue::new::<__Value>($e) }>::new(),
+            move |_| { $crate::ctx!($($rem)*) },
+        )
     }};
     (const $cvar:ty = ($e:expr) where $($id:ident = $var:ty),*; $($rem:tt)*) => {{
         #[doc(hidden)]
@@ -420,7 +422,10 @@ macro_rules! ctx {
         $action
     }};
     ($action:expr; $($rem:tt)*) => {{
-        $crate::BindAction::new($action, move |_| { $crate::ctx!($($rem)*) })
+        $crate::BindAction::new(
+            $action,
+            move |_| { $crate::ctx!($($rem)*) },
+        )
     }};
 }
 

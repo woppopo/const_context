@@ -235,50 +235,27 @@ where
     }
 }
 
-pub struct ClosureAction<F>(F);
+pub struct ReturnAction<Closure>(Closure);
 
-impl<F> ClosureAction<F> {
+impl<Closure> ReturnAction<Closure> {
     #[inline(always)]
-    pub const fn new(closure: F) -> Self {
+    pub const fn new(closure: Closure) -> Self {
         Self(closure)
     }
 }
 
-impl<Input, F, NextAction> Action<Input> for ClosureAction<F>
+impl<Input, Closure, Ret> Action<Input> for ReturnAction<Closure>
 where
     Input: VariableList,
-    F: FnOnce() -> NextAction,
-    NextAction: Action<Input>,
+    Closure: FnOnce() -> Ret,
 {
-    type OutputVars = NextAction::OutputVars;
-    type Output = NextAction::Output;
+    type OutputVars = Input;
+    type Output = Ret;
 
     #[inline(always)]
     fn eval(self) -> Self::Output {
         let Self(closure) = self;
-        closure().eval()
-    }
-}
-
-pub struct ReturnAction<T>(T);
-
-impl<T> ReturnAction<T> {
-    #[inline(always)]
-    pub const fn new(value: T) -> Self {
-        Self(value)
-    }
-}
-
-impl<Input, T> Action<Input> for ReturnAction<T>
-where
-    Input: VariableList,
-{
-    type OutputVars = Input;
-    type Output = T;
-
-    #[inline(always)]
-    fn eval(self) -> Self::Output {
-        self.0
+        closure()
     }
 }
 
@@ -329,15 +306,15 @@ where
 #[macro_export]
 macro_rules! ctx {
     () => {{
-        $crate::ReturnAction::new(())
+        $crate::ReturnAction::new(move || ())
     }};
     (pure $e:expr) => {{
-        $crate::ReturnAction::new($e)
+        $crate::ReturnAction::new(move || $e)
     }};
     (get $cvar:ty) => {{
         $crate::BindAction::new(
             $crate::GetAction::<$cvar>::new(),
-            $crate::ReturnAction::new,
+            move |var| { $crate::ReturnAction::new(move || var) },
         )
     }};
     (_ <- $action:expr; $($rem:tt)* ) => {{
@@ -361,16 +338,16 @@ macro_rules! ctx {
         )
     }};
     (let _ = $e:expr; $($rem:tt)*) => {{
-        $crate::ClosureAction::new(move || {
-            let _ = $e;
-            $crate::ctx! { $($rem)* }
-        })
+        $crate::BindAction::new(
+            $crate::ReturnAction::new(move || $e),
+            move |_| { $crate::ctx!($($rem)*) },
+        )
     }};
     (let $var:ident = $e:expr; $($rem:tt)*) => {{
-        $crate::ClosureAction::new(move || {
-            let $var = $e;
-            $crate::ctx! { $($rem)* }
-        })
+        $crate::BindAction::new(
+            $crate::ClosureAction::new(move || $e),
+            move |$var| { $crate::ctx!($($rem)*) },
+        )
     }};
     (const $cvar:ty = $e:expr; $($rem:tt)*) => {{
         #[doc(hidden)]

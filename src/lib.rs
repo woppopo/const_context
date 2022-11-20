@@ -348,7 +348,15 @@ macro_rules! ctx {
             move |$var| { $crate::ctx!($($rem)*) },
         )
     }};
-    (const $cvar:ty = $e:expr; $($rem:tt)*) => {{
+    (const _: $t:ty = $e:expr; $($rem:tt)*) => {{
+        const _: $t = $e;
+        $crate::ctx!($($rem)*)
+    }};
+    (const $var:ident: $t:ty = $e:expr; $($rem:tt)*) => {{
+        const $var: $t = $e;
+        $crate::ctx!($($rem)*)
+    }};
+    (set $cvar:ty = $e:expr; $($rem:tt)*) => {{
         #[doc(hidden)]
         type __Value = <$cvar as $crate::ConstVariable>::Value;
         $crate::BindAction::new(
@@ -356,7 +364,7 @@ macro_rules! ctx {
             move |_| { $crate::ctx!($($rem)*) },
         )
     }};
-    (const $cvar:ty = ($e:expr) where $($id:ident = $var:ty),*; $($rem:tt)*) => {{
+    (set $cvar:ty = ($e:expr) where $($id:ident = $var:ty),*; $($rem:tt)*) => {{
         #[doc(hidden)]
         type __Key = <$cvar as $crate::ConstVariable>::Key;
 
@@ -418,13 +426,13 @@ fn test() {
 
     let push90 = || {
         ctx! {
-            const Var = 90;
+            set Var = 90;
         }
     };
 
     let action = ctx! {
-        const Var = 45;
-        const Var = (a + b) where a = Var, b = Var;
+        set Var = 45;
+        set Var = (a + b) where a = Var, b = Var;
         get Var
     };
 
@@ -451,7 +459,7 @@ fn test() {
     assert_eq!(action.start_eval(), 42);
 
     let action = ctx! {
-        const Var = 90;
+        set Var = 90;
         get Var
     };
 

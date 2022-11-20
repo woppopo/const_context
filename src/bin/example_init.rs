@@ -30,7 +30,7 @@ mod need_init {
     pub fn initialize<Vars: VariableList>() -> impl Action<Vars, Output = ()> {
         ctx! {
             let _ = initialize_value();
-            const Functions = Functions(());
+            set Functions = Functions(());
         }
     }
 }

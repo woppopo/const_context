@@ -71,6 +71,8 @@ impl ConstValue {
     }
 }
 
+pub struct ConstValueAssertion<const VALUE: ConstValue>;
+
 pub struct VariableListEnd;
 
 pub struct VariableListHas<Key, Value, const VALUE: ConstValue, Next>(
@@ -372,7 +374,7 @@ macro_rules! ctx {
         type __Value = <$cvar as $crate::ConstVariable>::Value;
 
         #[doc(hidden)]
-        struct __CustomAssignAction<NextAction>(NextAction);
+        struct __CustomAssignAction;
 
         #[doc(hidden)]
         const fn __construct_const_value<Input: $crate::VariableList>() -> $crate::ConstValue {
@@ -384,23 +386,22 @@ macro_rules! ctx {
         }
 
         #[doc(hidden)]
-        impl<Input, NextAction> $crate::Action<Input>
-            for __CustomAssignAction<NextAction>
+        impl<Input> $crate::Action<Input> for __CustomAssignAction
         where
             Input: $crate::VariableList,
-            NextAction: $crate::Action<$crate::VariableListHas<__Key, __Value, { __construct_const_value::<Input>() }, Input>>,
+            $crate::ConstValueAssertion::<{ __construct_const_value::<Input>() }>:,
         {
-            type OutputVars = NextAction::OutputVars;
-            type Output = NextAction::Output;
+            type OutputVars = $crate::VariableListHas<__Key, __Value, { __construct_const_value::<Input>() }, Input>;
+            type Output = ();
 
             #[inline(always)]
-            fn eval(self) -> Self::Output {
-                let Self(next) = self;
-                next.eval()
-            }
+            fn eval(self) -> Self::Output {}
         }
 
-        __CustomAssignAction({ $crate::ctx!($($rem)*) })
+        $crate::BindAction::new(
+            __CustomAssignAction,
+            move |_| { $crate::ctx!($($rem)*) },
+        )
     }};
     ($action:expr) => {{
         $action

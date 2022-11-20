@@ -9,7 +9,6 @@
 #![feature(const_type_id)]
 #![feature(const_type_name)]
 #![feature(core_intrinsics)]
-#![feature(generic_const_exprs)]
 #![feature(inline_const)]
 #![feature(never_type)]
 

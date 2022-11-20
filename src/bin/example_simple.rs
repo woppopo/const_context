@@ -1,4 +1,5 @@
 #![feature(generic_const_exprs)]
+#![feature(inline_const)]
 
 use const_context::{ctx, StartEvaluation};
 

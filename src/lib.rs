@@ -171,6 +171,11 @@ pub trait ConstVariable {
     type Value: 'static + Eq;
 }
 
+impl ConstVariable for () {
+    type Key = ();
+    type Value = ();
+}
+
 impl<K, V> ConstVariable for (K, V)
 where
     K: 'static,
@@ -178,11 +183,6 @@ where
 {
     type Key = K;
     type Value = V;
-}
-
-impl<V: ConstVariable> ConstVariable for &V {
-    type Key = V::Key;
-    type Value = V::Value;
 }
 
 pub trait Action<Input>

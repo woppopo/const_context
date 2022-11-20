@@ -374,7 +374,7 @@ macro_rules! ctx {
         struct __CustomAssignAction;
 
         #[doc(hidden)]
-        struct __CustomVariableList<Input: $crate::VariableList>(core::marker::PhantomData<Input>);
+        struct __CustomVariableList<Input: $crate::VariableList>(::core::marker::PhantomData<Input>);
 
         #[doc(hidden)]
         impl<Input: $crate::VariableList> $crate::VariableList for __CustomVariableList<Input> {

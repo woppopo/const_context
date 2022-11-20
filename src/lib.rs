@@ -71,8 +71,6 @@ impl ConstValue {
     }
 }
 
-pub struct ConstValueAssertion<const VALUE: ConstValue>;
-
 pub struct VariableListEnd;
 
 pub struct VariableListHas<Key, Value, const VALUE: ConstValue, Next>(
@@ -377,21 +375,33 @@ macro_rules! ctx {
         struct __CustomAssignAction;
 
         #[doc(hidden)]
-        const fn __construct_const_value<Input: $crate::VariableList>() -> $crate::ConstValue {
-            $(let $id = $crate::find_variable::<
-                <$var as $crate::ConstVariable>::Key,
-                <$var as $crate::ConstVariable>::Value,
-                Input>();)*
-            $crate::ConstValue::new::<__Value>($e)
+        struct __CustomVariableList<Input: $crate::VariableList>(core::marker::PhantomData<Input>);
+
+        #[doc(hidden)]
+        impl<Input: $crate::VariableList> $crate::VariableList for __CustomVariableList<Input> {
+            type Next = Input;
+        }
+
+        #[doc(hidden)]
+        impl<Input: $crate::VariableList> $crate::VariableListElement for __CustomVariableList<Input> {
+            type Key = __Key;
+            type Value = __Value;
+            const VALUE: Option<$crate::ConstValue> = Some({
+                $(let $id = $crate::find_variable::<
+                    <$var as $crate::ConstVariable>::Key,
+                    <$var as $crate::ConstVariable>::Value,
+                    Input>();)*
+                $crate::ConstValue::new::<__Value>($e)
+            });
+            const END: bool = false;
         }
 
         #[doc(hidden)]
         impl<Input> $crate::Action<Input> for __CustomAssignAction
         where
             Input: $crate::VariableList,
-            $crate::ConstValueAssertion::<{ __construct_const_value::<Input>() }>:,
         {
-            type OutputVars = $crate::VariableListHas<__Key, __Value, { __construct_const_value::<Input>() }, Input>;
+            type OutputVars = __CustomVariableList<Input>;
             type Output = ();
 
             #[inline(always)]

@@ -306,28 +306,28 @@ where
 
 #[macro_export]
 macro_rules! ctx {
-    () => {{
+    {} => {{
         $crate::ReturnAction::new(move || ())
     }};
-    (pure $e:expr) => {{
+    { pure $e:expr } => {{
         $crate::ReturnAction::new(move || $e)
     }};
-    (get $cvar:ty) => {{
+    { get $cvar:ty } => {{
         $crate::GetAction::<$cvar>::new()
     }};
-    (_ <- $action:expr; $($rem:tt)* ) => {{
+    { _ <- $action:expr; $($rem:tt)*  } => {{
         $crate::BindAction::new(
             $action,
             move |_| { $crate::ctx!($($rem)*) },
         )
     }};
-    ($var:ident <- $action:expr; $($rem:tt)* ) => {{
+    { $var:ident <- $action:expr; $($rem:tt)*  } => {{
         $crate::BindAction::new(
             $action,
             move |$var| { $crate::ctx!($($rem)*) },
         )
     }};
-    ($var:ident <- get $cvar:ty; $($rem:tt)* ) => {{
+    { $var:ident <- get $cvar:ty; $($rem:tt)*  } => {{
         #[doc(hidden)]
         type __Value = <$cvar as $crate::ConstVariable>::Value;
         $crate::BindAction::new(
@@ -335,45 +335,45 @@ macro_rules! ctx {
             move |$var: __Value| { $crate::ctx!($($rem)*) },
         )
     }};
-    (let _ $(: $ty:ty)? = $e:expr; $($rem:tt)*) => {{
+    { let _ $(: $ty:ty)? = $e:expr; $($rem:tt)* } => {{
         $crate::BindAction::new(
             $crate::ReturnAction::new(move || $e),
             move |_ $(: $ty)?| { $crate::ctx!($($rem)*) },
         )
     }};
-    (let $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)*) => {{
+    { let $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)* } => {{
         $crate::BindAction::new(
             $crate::ReturnAction::new(move || $e),
             move |$var $(: $ty)?| { $crate::ctx!($($rem)*) },
         )
     }};
-    (let mut $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)*) => {{
+    { let mut $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)* } => {{
         $crate::BindAction::new(
             $crate::ReturnAction::new(move || $e),
             move |mut $var $(: $ty)?| { $crate::ctx!($($rem)*) },
         )
     }};
-    (let ref $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)*) => {{
+    { let ref $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)* } => {{
         $crate::BindAction::new(
             $crate::ReturnAction::new(move || $e),
             move |ref $var $(: $ty)?| { $crate::ctx!($($rem)*) },
         )
     }};
-    (let ref mut $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)*) => {{
+    { let ref mut $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)* } => {{
         $crate::BindAction::new(
             $crate::ReturnAction::new(move || $e),
             move |ref mut $var $(: $ty)?| { $crate::ctx!($($rem)*) },
         )
     }};
-    (const _: $t:ty = $e:expr; $($rem:tt)*) => {{
+    { const _: $t:ty = $e:expr; $($rem:tt)* } => {{
         const _: $t = $e;
         $crate::ctx!($($rem)*)
     }};
-    (const $var:ident: $t:ty = $e:expr; $($rem:tt)*) => {{
+    { const $var:ident: $t:ty = $e:expr; $($rem:tt)* } => {{
         const $var: $t = $e;
         $crate::ctx!($($rem)*)
     }};
-    (set $cvar:ty = $e:expr; $($rem:tt)*) => {{
+    { set $cvar:ty = $e:expr; $($rem:tt)* } => {{
         #[doc(hidden)]
         type __Value = <$cvar as $crate::ConstVariable>::Value;
         $crate::BindAction::new(
@@ -381,7 +381,7 @@ macro_rules! ctx {
             move |_| { $crate::ctx!($($rem)*) },
         )
     }};
-    (set $cvar:ty = ($e:expr) where $($id:ident = $var:ty),*; $($rem:tt)*) => {{
+    { set $cvar:ty = ($e:expr) where $($id:ident = $var:ty),*; $($rem:tt)* } => {{
         #[doc(hidden)]
         type __Key = <$cvar as $crate::ConstVariable>::Key;
 
@@ -435,10 +435,10 @@ macro_rules! ctx {
             move |_| { $crate::ctx!($($rem)*) },
         )
     }};
-    ($action:expr) => {{
+    { $action:expr } => {{
         $action
     }};
-    ($action:expr; $($rem:tt)*) => {{
+    { $action:expr; $($rem:tt)* } => {{
         $crate::BindAction::new(
             $action,
             move |_| { $crate::ctx!($($rem)*) },

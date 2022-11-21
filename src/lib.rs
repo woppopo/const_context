@@ -405,7 +405,10 @@ macro_rules! ctx {
 
             #[inline(always)]
             fn eval(self) -> Self::Output {
-                const { <Self::OutputVars as $crate::VariableListElement>::VALUE };
+                #[allow(path_statements)]
+                const {
+                    <Self::OutputVars as $crate::VariableListElement>::VALUE;
+                }
             }
         }
 

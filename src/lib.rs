@@ -335,16 +335,34 @@ macro_rules! ctx {
             move |$var: __Value| { $crate::ctx!($($rem)*) },
         )
     }};
-    (let _ = $e:expr; $($rem:tt)*) => {{
+    (let _ $(: $ty:ty)? = $e:expr; $($rem:tt)*) => {{
         $crate::BindAction::new(
             $crate::ReturnAction::new(move || $e),
-            move |_| { $crate::ctx!($($rem)*) },
+            move |_ $(: $ty)?| { $crate::ctx!($($rem)*) },
         )
     }};
-    (let $var:ident = $e:expr; $($rem:tt)*) => {{
+    (let $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)*) => {{
         $crate::BindAction::new(
             $crate::ReturnAction::new(move || $e),
-            move |$var| { $crate::ctx!($($rem)*) },
+            move |$var $(: $ty)?| { $crate::ctx!($($rem)*) },
+        )
+    }};
+    (let mut $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)*) => {{
+        $crate::BindAction::new(
+            $crate::ReturnAction::new(move || $e),
+            move |mut $var $(: $ty)?| { $crate::ctx!($($rem)*) },
+        )
+    }};
+    (let ref $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)*) => {{
+        $crate::BindAction::new(
+            $crate::ReturnAction::new(move || $e),
+            move |ref $var $(: $ty)?| { $crate::ctx!($($rem)*) },
+        )
+    }};
+    (let ref mut $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)*) => {{
+        $crate::BindAction::new(
+            $crate::ReturnAction::new(move || $e),
+            move |ref mut $var $(: $ty)?| { $crate::ctx!($($rem)*) },
         )
     }};
     (const _: $t:ty = $e:expr; $($rem:tt)*) => {{
@@ -484,4 +502,17 @@ fn test() {
     };
 
     assert_eq!(action2.start_eval(), 90);
+
+    let action = ctx! {
+        let _a = 0;
+        let mut _a = 0;
+        let ref _a = 0;
+        let ref mut _a = 0;
+        let _a: u32 = 0;
+        let mut _a: u32 = 0;
+        let ref _a: u32 = 0;
+        let ref mut _a: u32 = 0;
+    };
+
+    assert_eq!(action.start_eval(), ());
 }

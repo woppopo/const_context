@@ -381,7 +381,7 @@ macro_rules! ctx {
             move |_| { $crate::ctx!($($rem)*) },
         )
     }};
-    { set $cvar:ty = ($e:expr) where $($id:ident = $var:ty),*; $($rem:tt)* } => {{
+    { set $cvar:ty = $e:expr, where $($id:ident = $var:ty),*; $($rem:tt)* } => {{
         #[doc(hidden)]
         type __Key = <$cvar as $crate::ConstVariable>::Key;
 
@@ -465,7 +465,7 @@ fn test() {
 
     let action = ctx! {
         set Var = 45;
-        set Var = (a + b) where a = Var, b = Var;
+        set Var = a + b, where a = Var, b = Var;
         get Var
     };
 

@@ -24,7 +24,9 @@ fn initialize<Vars: VariableList>() -> impl Action<Vars> {
 
 fn after_initialization<Vars: VariableList>() -> impl Action<Vars> {
     ctx! {
-        set () = (assert!(is_initialized)) where is_initialized = IsInitialized;
+        set () = assert!(is_initialized),
+        where
+            is_initialized = IsInitialized;
         let _ = println!("bar.");
     }
 }

@@ -10,19 +10,19 @@ const_context = { git = "https://github.com/woppopo/const_context" }
 ```rust
 #![feature(inline_const)]
 
-use const_context::{ctx, Action, StartEvaluation, VariableList};
+use const_context::{ctx, Action};
 
 struct Key;
 type IsInitialized = (Key, bool);
 
-fn initialize<Vars: VariableList>() -> impl Action<Vars> {
+fn initialize() -> impl Action {
     ctx! {
         set IsInitialized = true;
         let _ = println!("foo,");
     }
 }
 
-fn after_initialization<Vars: VariableList>() -> impl Action<Vars> {
+fn after_initialization() -> impl Action {
     ctx! {
         set () = assert!(is_initialized),
         where

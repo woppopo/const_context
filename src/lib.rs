@@ -185,26 +185,14 @@ where
     type Value = V;
 }
 
-pub trait Action {
+pub trait Action: Sized {
     type Output;
-}
+    type Vars<Vars: VariableList>: VariableList;
+    fn eval<Vars: VariableList>(self) -> Self::Output;
 
-pub trait EvaluatableAction<VarsIn>: Action
-where
-    VarsIn: VariableList,
-{
-    type VarsOut: VariableList;
-    fn eval(self) -> Self::Output;
-}
-
-pub trait StartEvaluation: Action {
-    fn start_eval(self) -> Self::Output;
-}
-
-impl<T: EvaluatableAction<VariableListEnd>> StartEvaluation for T {
     #[inline(always)]
     fn start_eval(self) -> Self::Output {
-        self.eval()
+        self.eval::<VariableListEnd>()
     }
 }
 
@@ -229,23 +217,13 @@ where
     NextAction: Action,
 {
     type Output = NextAction::Output;
-}
-
-impl<Input, PreviousAction, ActionConstructor, NextAction> EvaluatableAction<Input>
-    for BindAction<PreviousAction, ActionConstructor>
-where
-    Input: VariableList,
-    PreviousAction: EvaluatableAction<Input>,
-    ActionConstructor: FnOnce(PreviousAction::Output) -> NextAction,
-    NextAction: EvaluatableAction<PreviousAction::VarsOut>,
-{
-    type VarsOut = NextAction::VarsOut;
+    type Vars<Vars: VariableList> = NextAction::Vars<PreviousAction::Vars<Vars>>;
 
     #[inline(always)]
-    fn eval(self) -> Self::Output {
+    fn eval<Vars: VariableList>(self) -> Self::Output {
         let Self(action, constructor) = self;
-        let output = action.eval();
-        constructor(output).eval()
+        let output = action.eval::<Vars>();
+        constructor(output).eval::<PreviousAction::Vars<Vars>>()
     }
 }
 
@@ -263,17 +241,10 @@ where
     Closure: FnOnce() -> Ret,
 {
     type Output = Ret;
-}
-
-impl<Input, Closure, Ret> EvaluatableAction<Input> for ReturnAction<Closure>
-where
-    Input: VariableList,
-    Closure: FnOnce() -> Ret,
-{
-    type VarsOut = Input;
+    type Vars<Vars: VariableList> = Vars;
 
     #[inline(always)]
-    fn eval(self) -> Self::Output {
+    fn eval<Vars: VariableList>(self) -> Self::Output {
         let Self(closure) = self;
         closure()
     }
@@ -293,18 +264,11 @@ where
     Variable: ConstVariable,
 {
     type Output = Variable::Value;
-}
-
-impl<Input, Variable> EvaluatableAction<Input> for GetAction<Variable>
-where
-    Input: VariableList,
-    Variable: ConstVariable,
-{
-    type VarsOut = Input;
+    type Vars<Vars: VariableList> = Vars;
 
     #[inline(always)]
-    fn eval(self) -> Self::Output {
-        const { find_variable::<Variable::Key, Variable::Value, Input>() }
+    fn eval<Vars: VariableList>(self) -> Self::Output {
+        const { find_variable::<Variable::Key, Variable::Value, Vars>() }
     }
 }
 
@@ -317,20 +281,15 @@ impl<Variable, const VALUE: ConstValue> AssignAction<Variable, VALUE> {
     }
 }
 
-impl<Variable, const VALUE: ConstValue> Action for AssignAction<Variable, VALUE> {
-    type Output = ();
-}
-
-impl<Input, Variable, const VALUE: ConstValue> EvaluatableAction<Input>
-    for AssignAction<Variable, VALUE>
+impl<Variable, const VALUE: ConstValue> Action for AssignAction<Variable, VALUE>
 where
-    Input: VariableList,
     Variable: ConstVariable,
 {
-    type VarsOut = VariableListHas<Variable::Key, Variable::Value, VALUE, Input>;
+    type Output = ();
+    type Vars<Vars: VariableList> = VariableListHas<Variable::Key, Variable::Value, VALUE, Vars>;
 
     #[inline(always)]
-    fn eval(self) -> Self::Output {}
+    fn eval<Vars: VariableList>(self) -> Self::Output {}
 }
 
 #[macro_export]
@@ -443,20 +402,13 @@ macro_rules! ctx {
         #[doc(hidden)]
         impl $crate::Action for __CustomAssignAction {
             type Output = ();
-        }
-
-        #[doc(hidden)]
-        impl<VarsIn> $crate::EvaluatableAction<VarsIn> for __CustomAssignAction
-        where
-            VarsIn: $crate::VariableList,
-        {
-            type VarsOut = __CustomVariableList<VarsIn>;
+            type Vars<Vars: $crate::VariableList> = __CustomVariableList<Vars>;
 
             #[inline(always)]
-            fn eval(self) -> Self::Output {
+            fn eval<Vars: $crate::VariableList>(self) -> Self::Output {
                 #[allow(path_statements)]
                 const {
-                    <Self::VarsOut as $crate::VariableListElement>::VALUE;
+                    <Self::Vars<Vars> as $crate::VariableListElement>::VALUE;
                 }
             }
         }
@@ -482,7 +434,7 @@ macro_rules! ctx {
 fn test() {
     type Var = ((), u32);
 
-    fn f<Vars: VariableList>(n: u32) -> impl EvaluatableAction<Vars, Output = u32> {
+    fn f(n: u32) -> impl Action<Output = u32> {
         ctx! {
             pure n
         }

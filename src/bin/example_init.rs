@@ -1,4 +1,4 @@
-use const_context::{ctx, ConstVariable, EvaluatableAction, StartEvaluation, VariableList};
+use const_context::{ctx, Action, ConstVariable};
 
 mod need_init {
     use super::*;
@@ -27,7 +27,7 @@ mod need_init {
         type Value = Self;
     }
 
-    pub fn initialize<Vars: VariableList>() -> impl EvaluatableAction<Vars, Output = ()> {
+    pub fn initialize() -> impl Action<Output = ()> {
         ctx! {
             let _ = initialize_value();
             set Functions = Functions(());

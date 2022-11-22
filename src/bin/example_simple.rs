@@ -1,6 +1,6 @@
 #![feature(inline_const)]
 
-use const_context::{ctx, StartEvaluation};
+use const_context::{ctx, Action};
 
 struct Id<const N: usize>;
 type Var1 = (Id<1>, u32);

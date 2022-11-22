@@ -1,6 +1,6 @@
 #![feature(inline_const)]
 
-use const_context::{ctx, EvaluatableAction, StartEvaluation, VariableList};
+use const_context::{ctx, Action};
 
 #[derive(PartialEq, Eq)]
 enum Countdown {
@@ -12,14 +12,14 @@ enum Countdown {
 
 type Count = (Countdown, Countdown);
 
-fn three<Vars: VariableList>() -> impl EvaluatableAction<Vars> {
+fn three() -> impl Action {
     ctx! {
         let _ = println!("three.");
         set Count = Countdown::Three;
     }
 }
 
-fn two<Vars: VariableList>() -> impl EvaluatableAction<Vars> {
+fn two() -> impl Action {
     ctx! {
         let _ = println!("two.");
         set Count = match a {
@@ -29,7 +29,7 @@ fn two<Vars: VariableList>() -> impl EvaluatableAction<Vars> {
     }
 }
 
-fn one<Vars: VariableList>() -> impl EvaluatableAction<Vars> {
+fn one() -> impl Action {
     ctx! {
         let _ = println!("one.");
         set Count = match a {
@@ -39,7 +39,7 @@ fn one<Vars: VariableList>() -> impl EvaluatableAction<Vars> {
     }
 }
 
-fn go<Vars: VariableList>() -> impl EvaluatableAction<Vars> {
+fn go() -> impl Action {
     ctx! {
         let _ = println!("go!");
         set Count = match a {

@@ -360,20 +360,12 @@ macro_rules! ctx {
         $crate::ctx!($($rem)*)
     }};
     { set $cvar:ty = $e:expr; $($rem:tt)* } => {{
-        #[doc(hidden)]
-        type __Value = <$cvar as $crate::ConstVariable>::Value;
         $crate::BindAction::new(
-            $crate::AssignAction::<$cvar, { $crate::ConstValue::new::<__Value>($e) }>::new(),
+            $crate::AssignAction::<$cvar, { $crate::ConstValue::new($e) }>::new(),
             move |_| { $crate::ctx!($($rem)*) },
         )
     }};
     { set $cvar:ty = $e:expr, where $($id:ident = $var:ty),*; $($rem:tt)* } => {{
-        #[doc(hidden)]
-        type __Key = <$cvar as $crate::ConstVariable>::Key;
-
-        #[doc(hidden)]
-        type __Value = <$cvar as $crate::ConstVariable>::Value;
-
         #[doc(hidden)]
         struct __CustomAssignAction;
 
@@ -387,14 +379,14 @@ macro_rules! ctx {
 
         #[doc(hidden)]
         impl<Input: $crate::VariableList> $crate::VariableListElement for __CustomVariableList<Input> {
-            type Key = __Key;
-            type Value = __Value;
+            type Key = <$cvar as $crate::ConstVariable>::Key;
+            type Value = <$cvar as $crate::ConstVariable>::Value;
             const VALUE: Option<$crate::ConstValue> = Some({
                 $(let $id = $crate::find_variable::<
                     <$var as $crate::ConstVariable>::Key,
                     <$var as $crate::ConstVariable>::Value,
                     Input>();)*
-                $crate::ConstValue::new::<__Value>($e)
+                $crate::ConstValue::new($e)
             });
             const END: bool = false;
         }

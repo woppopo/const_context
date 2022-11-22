@@ -56,7 +56,6 @@ impl ConstValue {
     pub const fn new<T>(value: T) -> Self
     where
         T: 'static,
-        T: Eq,
     {
         Self(into_bytes(value))
     }
@@ -168,7 +167,7 @@ where
 
 pub trait ConstVariable {
     type Key: 'static;
-    type Value: 'static + Eq;
+    type Value: 'static;
 }
 
 impl ConstVariable for () {
@@ -179,7 +178,7 @@ impl ConstVariable for () {
 impl<K, V> ConstVariable for (K, V)
 where
     K: 'static,
-    V: 'static + Eq,
+    V: 'static,
 {
     type Key = K;
     type Value = V;

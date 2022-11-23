@@ -3,7 +3,6 @@
 #![cfg_attr(feature = "conditional", feature(specialization))]
 #![feature(adt_const_params)]
 #![feature(const_heap)]
-#![feature(const_mut_refs)]
 #![feature(const_option)]
 #![feature(const_ptr_read)]
 #![feature(const_ptr_write)]
@@ -53,7 +52,7 @@ impl ConstValue {
         let bytes = unsafe {
             let ptr = const_allocate(size, align);
             core::ptr::write(ptr.cast(), value);
-            core::slice::from_raw_parts_mut(ptr.cast(), size)
+            core::slice::from_raw_parts(ptr.cast(), size)
         };
 
         Self(bytes)

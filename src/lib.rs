@@ -362,7 +362,7 @@ macro_rules! ctx {
             $($rem)*
         }
     }};
-    { set $cvar:ty = $e:expr, where $($id:ident = $var:ty),*; $($rem:tt)* } => {{
+    { set $cvar:ty = $e:expr, where $($id:ident = $var:ty),+; $($rem:tt)* } => {{
         #[doc(hidden)]
         struct __CustomAssignAction;
 

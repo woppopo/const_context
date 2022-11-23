@@ -10,7 +10,6 @@
 #![feature(const_type_name)]
 #![feature(core_intrinsics)]
 #![feature(inline_const)]
-#![feature(never_type)]
 
 use core::any::TypeId;
 use core::intrinsics::const_allocate;
@@ -84,8 +83,8 @@ pub trait VariableList {
 
 impl VariableList for VariableListEnd {
     type Next = VariableListEnd;
-    type Key = !;
-    type Value = !;
+    type Key = ();
+    type Value = ();
     const VALUE: VariableListValue<ConstValue> = VariableListValue::End;
 }
 
@@ -101,7 +100,7 @@ impl<Key: 'static, Value: 'static, const VAL: ConstValue, Next: VariableList> Va
 impl<Key: 'static, Next: VariableList> VariableList for VariableListRemoved<Key, Next> {
     type Next = Next;
     type Key = Key;
-    type Value = !;
+    type Value = ();
     const VALUE: VariableListValue<ConstValue> = VariableListValue::Removed;
 }
 

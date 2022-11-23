@@ -1,4 +1,6 @@
 #![cfg_attr(not(test), no_std)]
+#![cfg_attr(feature = "conditional", feature(associated_const_equality))]
+#![cfg_attr(feature = "conditional", feature(specialization))]
 #![feature(adt_const_params)]
 #![feature(const_heap)]
 #![feature(const_mut_refs)]
@@ -10,6 +12,9 @@
 #![feature(const_type_name)]
 #![feature(core_intrinsics)]
 #![feature(inline_const)]
+
+#[cfg(feature = "conditional")]
+pub mod conditional;
 
 use core::any::TypeId;
 use core::intrinsics::const_allocate;

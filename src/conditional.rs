@@ -3,7 +3,7 @@ use core::marker::PhantomData;
 use crate::{Action, VariableList};
 
 pub trait IntoBoolFromVariableList {
-    type Into<Vars: VariableList>: IntoBool;
+    type From<Vars: VariableList>: IntoBool;
 }
 
 pub trait IntoBool {
@@ -31,19 +31,8 @@ impl<Cond: IntoBool<BOOL = true>> BoolToTypeBool for Cond {
     type Into = True;
 }
 
-pub struct DummyAction<Output>(PhantomData<Output>);
-
-impl<Output> Action for DummyAction<Output> {
-    type Output = Output;
-    type Vars<Vars: VariableList> = Vars;
-    fn eval<Vars: VariableList>(self) -> Self::Output {
-        unreachable!()
-    }
-}
-
 pub trait Select<Output> {
     type Action: Action<Output = Output>;
-    fn selected(self) -> Self::Action;
 }
 
 pub struct SelectAction<A, B, Cond: TypeBool, Output>(A, B, PhantomData<(Cond, Output)>)
@@ -66,10 +55,7 @@ where
     A: Action<Output = Output>,
     B: Action<Output = Output>,
 {
-    default type Action = DummyAction<Output>;
-    default fn selected(self) -> Self::Action {
-        unreachable!()
-    }
+    default type Action = B;
 }
 
 impl<A, B, Output> Select<Output> for SelectAction<A, B, True, Output>
@@ -78,20 +64,6 @@ where
     B: Action<Output = Output>,
 {
     type Action = A;
-    fn selected(self) -> Self::Action {
-        self.0
-    }
-}
-
-impl<A, B, Output> Select<Output> for SelectAction<A, B, False, Output>
-where
-    A: Action<Output = Output>,
-    B: Action<Output = Output>,
-{
-    type Action = B;
-    fn selected(self) -> Self::Action {
-        self.1
-    }
 }
 
 pub struct IfAction<A, B, Cond, Output>(A, B, PhantomData<(Cond, Output)>);
@@ -113,17 +85,18 @@ where
 {
     type Output = Output;
     type Vars<Vars: VariableList> =
-        <<SelectAction<A, B, <Cond::Into<Vars> as BoolToTypeBool>::Into, Output> as Select<
+        <<SelectAction<A, B, <Cond::From<Vars> as BoolToTypeBool>::Into, Output> as Select<
             Output,
         >>::Action as Action>::Vars<Vars>;
 
     #[inline(always)]
     fn eval<Vars: VariableList>(self) -> Self::Output {
-        SelectAction::<A, B, <Cond::Into<Vars> as BoolToTypeBool>::Into, Output>::new(
-            self.0, self.1,
-        )
-        .selected()
-        .eval::<Vars>()
+        let Self(a, b, ..) = self;
+        if <Cond::From<Vars> as IntoBool>::BOOL {
+            a.eval::<Vars>()
+        } else {
+            b.eval::<Vars>()
+        }
     }
 }
 
@@ -135,7 +108,7 @@ macro_rules! ctx_if {
 
         #[doc(hidden)]
         impl $crate::conditional::IntoBoolFromVariableList for __Condition {
-            type Into<Vars: $crate::VariableList> = __ConditionBool<Vars>;
+            type From<Vars: $crate::VariableList> = __ConditionBool<Vars>;
         }
 
         #[doc(hidden)]

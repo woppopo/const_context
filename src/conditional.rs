@@ -45,6 +45,7 @@ where
     A: Action<Output = Output>,
     B: Action<Output = Output>,
 {
+    #[inline(always)]
     pub const fn new(a: A, b: B) -> Self {
         Self(a, b, PhantomData)
     }
@@ -73,6 +74,7 @@ where
     A: Action<Output = Output>,
     B: Action<Output = Output>,
 {
+    #[inline(always)]
     pub const fn new(a: A, b: B) -> Self {
         Self(a, b, PhantomData)
     }

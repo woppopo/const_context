@@ -69,52 +69,40 @@ pub struct VariableListHas<Key, Value, const VALUE: ConstValue, Next>(
 
 pub struct VariableListRemoved<Key, Next>(PhantomData<(Key, Next)>);
 
-pub trait VariableList: VariableListElement {
-    type Next: VariableList;
+pub enum VariableListValue<T> {
+    End,
+    Has(T),
+    Removed,
 }
 
-pub trait VariableListElement {
+pub trait VariableList {
+    type Next: VariableList;
     type Key: 'static;
     type Value: 'static;
-    const VALUE: Option<ConstValue>;
-    const END: bool;
-}
-
-impl VariableListElement for VariableListEnd {
-    type Key = !;
-    type Value = !;
-    const VALUE: Option<ConstValue> = None;
-    const END: bool = true;
+    const VALUE: VariableListValue<ConstValue>;
 }
 
 impl VariableList for VariableListEnd {
     type Next = VariableListEnd;
-}
-
-impl<Key: 'static, Value: 'static, const VAL: ConstValue, Next: VariableList> VariableListElement
-    for VariableListHas<Key, Value, VAL, Next>
-{
-    type Key = Key;
-    type Value = Value;
-    const VALUE: Option<ConstValue> = Some(VAL);
-    const END: bool = false;
+    type Key = !;
+    type Value = !;
+    const VALUE: VariableListValue<ConstValue> = VariableListValue::End;
 }
 
 impl<Key: 'static, Value: 'static, const VAL: ConstValue, Next: VariableList> VariableList
     for VariableListHas<Key, Value, VAL, Next>
 {
     type Next = Next;
-}
-
-impl<Key: 'static, Next: VariableList> VariableListElement for VariableListRemoved<Key, Next> {
     type Key = Key;
-    type Value = !;
-    const VALUE: Option<ConstValue> = None;
-    const END: bool = false;
+    type Value = Value;
+    const VALUE: VariableListValue<ConstValue> = VariableListValue::Has(VAL);
 }
 
 impl<Key: 'static, Next: VariableList> VariableList for VariableListRemoved<Key, Next> {
     type Next = Next;
+    type Key = Key;
+    type Value = !;
+    const VALUE: VariableListValue<ConstValue> = VariableListValue::Removed;
 }
 
 const fn error_not_found<Key>() -> &'static str {
@@ -140,20 +128,20 @@ where
     Key: 'static,
     Value: 'static,
 {
-    if List::END {
-        panic!("{}", error_not_found::<Key>());
-    }
-
-    if type_eq::<Key, List::Key>() {
-        let value = List::VALUE.expect(error_not_found::<Key>());
-        assert!(
-            type_eq::<Value, List::Value>(),
-            "{}",
-            error_unexpected_type::<Value, List::Value>()
-        );
-        value.with_type()
-    } else {
-        find_variable::<Key, Value, List::Next>()
+    match List::VALUE {
+        VariableListValue::End => panic!("{}", error_not_found::<Key>()),
+        VariableListValue::Removed if type_eq::<Key, List::Key>() => {
+            panic!("{}", error_not_found::<Key>())
+        }
+        VariableListValue::Has(value) if type_eq::<Key, List::Key>() => {
+            assert!(
+                type_eq::<Value, List::Value>(),
+                "{}",
+                error_unexpected_type::<Value, List::Value>()
+            );
+            value.with_type()
+        }
+        _ => find_variable::<Key, Value, List::Next>(),
     }
 }
 
@@ -396,20 +384,15 @@ macro_rules! ctx {
         #[doc(hidden)]
         impl<Input: $crate::VariableList> $crate::VariableList for __CustomVariableList<Input> {
             type Next = Input;
-        }
-
-        #[doc(hidden)]
-        impl<Input: $crate::VariableList> $crate::VariableListElement for __CustomVariableList<Input> {
             type Key = <$cvar as $crate::ConstVariable>::Key;
             type Value = <$cvar as $crate::ConstVariable>::Value;
-            const VALUE: Option<$crate::ConstValue> = Some({
+            const VALUE: $crate::VariableListValue<$crate::ConstValue> = $crate::VariableListValue::Has({
                 $(let $id = $crate::find_variable::<
                     <$var as $crate::ConstVariable>::Key,
                     <$var as $crate::ConstVariable>::Value,
                     Input>();)*
                 $crate::ConstValue::new($e)
             });
-            const END: bool = false;
         }
 
         #[doc(hidden)]
@@ -421,7 +404,7 @@ macro_rules! ctx {
             fn eval<Vars: $crate::VariableList>(self) -> Self::Output {
                 #[allow(path_statements)]
                 const {
-                    <Self::Vars<Vars> as $crate::VariableListElement>::VALUE;
+                    <Self::Vars<Vars> as $crate::VariableList>::VALUE;
                 }
             }
         }

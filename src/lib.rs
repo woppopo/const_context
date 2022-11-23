@@ -22,18 +22,7 @@ const fn type_eq<A: 'static, B: 'static>() -> bool {
     unsafe { core::mem::transmute::<_, u64>(a) == core::mem::transmute::<_, u64>(b) }
 }
 
-const fn into_bytes<T>(value: T) -> &'static mut [u8] {
-    let size = core::mem::size_of::<T>();
-    let align = core::mem::align_of::<T>();
-
-    unsafe {
-        let ptr = const_allocate(size, align);
-        core::ptr::write(ptr.cast(), value);
-        core::slice::from_raw_parts_mut(ptr.cast(), size)
-    }
-}
-
-const fn str_concat(s1: &'static str, s2: &'static str) -> &'static str {
+const fn str_concat(s1: &str, s2: &str) -> &'static str {
     let s1 = s1.as_bytes();
     let s2 = s2.as_bytes();
     let len = s1.len() + s2.len();
@@ -53,17 +42,20 @@ const fn str_concat(s1: &'static str, s2: &'static str) -> &'static str {
 pub struct ConstValue(&'static [u8]);
 
 impl ConstValue {
-    pub const fn new<T>(value: T) -> Self
-    where
-        T: 'static,
-    {
-        Self(into_bytes(value))
+    pub const fn new<T>(value: T) -> Self {
+        let size = core::mem::size_of::<T>();
+        let align = core::mem::align_of::<T>();
+
+        let bytes = unsafe {
+            let ptr = const_allocate(size, align);
+            core::ptr::write(ptr.cast(), value);
+            core::slice::from_raw_parts_mut(ptr.cast(), size)
+        };
+
+        Self(bytes)
     }
 
-    pub const fn with_type<T>(self) -> T
-    where
-        T: 'static,
-    {
+    pub const fn with_type<T>(self) -> T {
         let Self(bytes) = self;
         unsafe { core::ptr::read(bytes.as_ptr().cast()) }
     }

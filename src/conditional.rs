@@ -92,7 +92,7 @@ where
     #[inline(always)]
     fn eval<Vars: VariableList>(self) -> Self::Output {
         let Self(a, b, ..) = self;
-        if <Cond::From<Vars> as IntoBool>::BOOL {
+        if const { <Cond::From<Vars> as IntoBool>::BOOL } {
             a.eval::<Vars>()
         } else {
             b.eval::<Vars>()
@@ -135,6 +135,7 @@ fn test() {
     use crate::ctx;
 
     type Var = (u32, u32);
+    type Var2 = (u64, u64);
 
     let action = ctx! {
         set Var = 45;
@@ -145,4 +146,15 @@ fn test() {
         )
     };
     assert_eq!(action.start_eval(), "==");
+
+    let action = ctx! {
+        set Var = 45;
+        ctx_if!(
+            a + b == 90, where a = Var, b = Var;
+            then { ctx! { set Var2 = 42; } }
+            else { ctx! { } }
+        );
+        get Var2
+    };
+    assert_eq!(action.start_eval(), 42);
 }

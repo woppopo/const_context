@@ -373,12 +373,21 @@ macro_rules! ctx {
         $crate::ctx! { $($rem)* }
     }};
     { set $cvar:ty = $e:expr; $($rem:tt)* } => {{
+        #[doc(hidden)]
+        type __Value = <$cvar as $crate::ConstVariable>::Value;
+
         $crate::ctx! {
-            $crate::SetAction::<$cvar, { $crate::ConstValue::new($e) }>::new();
+            $crate::SetAction::<$cvar, { $crate::ConstValue::new::<__Value>($e) }>::new();
             $($rem)*
         }
     }};
     { set $cvar:ty = $e:expr, where $($id:ident = $var:ty),+; $($rem:tt)* } => {{
+        #[doc(hidden)]
+        type __Key = <$cvar as $crate::ConstVariable>::Key;
+
+        #[doc(hidden)]
+        type __Value = <$cvar as $crate::ConstVariable>::Value;
+
         #[doc(hidden)]
         struct __CustomSetAction;
 
@@ -388,14 +397,14 @@ macro_rules! ctx {
         #[doc(hidden)]
         impl<Input: $crate::VariableList> $crate::VariableList for __CustomVariableList<Input> {
             type Next = Input;
-            type Key = <$cvar as $crate::ConstVariable>::Key;
-            type Value = <$cvar as $crate::ConstVariable>::Value;
+            type Key = __Key;
+            type Value = __Value;
             const VALUE: $crate::VariableListValue<$crate::ConstValue> = $crate::VariableListValue::Has({
                 $(let $id = $crate::find_variable::<
                     <$var as $crate::ConstVariable>::Key,
                     <$var as $crate::ConstVariable>::Value,
                     Input>();)*
-                $crate::ConstValue::new($e)
+                $crate::ConstValue::new::<__Value>($e)
             });
         }
 

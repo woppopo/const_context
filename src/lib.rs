@@ -348,12 +348,16 @@ macro_rules! ctx {
             move |ref mut $var $(: $ty)?| $crate::ctx! { $($rem)* },
         )
     }};
-    { const _: $t:ty = $e:expr; $($rem:tt)* } => {{
-        const _: $t = $e;
+    { const _: $ty:ty = $value:expr; $($rem:tt)* } => {{
+        const _: $ty = $value;
         $crate::ctx! { $($rem)* }
     }};
-    { const $var:ident: $t:ty = $e:expr; $($rem:tt)* } => {{
-        const $var: $t = $e;
+    { const $name:ident: $ty:ty = $value:expr; $($rem:tt)* } => {{
+        const $name: $ty = $value;
+        $crate::ctx! { $($rem)* }
+    }};
+    { type $name:ident = $ty:ty; $($rem:tt)* } => {{
+        type $name = $ty;
         $crate::ctx! { $($rem)* }
     }};
     { set $cvar:ty = $e:expr; $($rem:tt)* } => {{
@@ -484,6 +488,8 @@ fn test() {
         let mut _a: u32 = 0;
         let ref _a: u32 = 0;
         let ref mut _a: u32 = 0;
+        type Temp = (u64, u64);
+        set Temp = 0;
     };
 
     assert_eq!(action.start_eval(), ());

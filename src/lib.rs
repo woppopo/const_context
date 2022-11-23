@@ -218,16 +218,16 @@ where
     }
 }
 
-pub struct ReturnAction<Closure>(Closure);
+pub struct PureAction<Closure>(Closure);
 
-impl<Closure> ReturnAction<Closure> {
+impl<Closure> PureAction<Closure> {
     #[inline(always)]
     pub const fn new(closure: Closure) -> Self {
         Self(closure)
     }
 }
 
-impl<Closure, Ret> Action for ReturnAction<Closure>
+impl<Closure, Ret> Action for PureAction<Closure>
 where
     Closure: FnOnce() -> Ret,
 {
@@ -263,16 +263,36 @@ where
     }
 }
 
-pub struct AssignAction<Variable, const VALUE: ConstValue>(PhantomData<Variable>);
+pub struct UnsetAction<Variable>(PhantomData<Variable>);
 
-impl<Variable, const VALUE: ConstValue> AssignAction<Variable, VALUE> {
+impl<Variable> UnsetAction<Variable> {
     #[inline(always)]
     pub const fn new() -> Self {
         Self(PhantomData)
     }
 }
 
-impl<Variable, const VALUE: ConstValue> Action for AssignAction<Variable, VALUE>
+impl<Variable> Action for UnsetAction<Variable>
+where
+    Variable: ConstVariable,
+{
+    type Output = ();
+    type Vars<Vars: VariableList> = VariableListRemoved<Variable::Key, Vars>;
+
+    #[inline(always)]
+    fn eval<Vars: VariableList>(self) -> Self::Output {}
+}
+
+pub struct SetAction<Variable, const VALUE: ConstValue>(PhantomData<Variable>);
+
+impl<Variable, const VALUE: ConstValue> SetAction<Variable, VALUE> {
+    #[inline(always)]
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<Variable, const VALUE: ConstValue> Action for SetAction<Variable, VALUE>
 where
     Variable: ConstVariable,
 {
@@ -286,10 +306,10 @@ where
 #[macro_export]
 macro_rules! ctx {
     {} => {{
-        $crate::ReturnAction::new(move || ())
+        $crate::PureAction::new(move || ())
     }};
     { pure $e:expr } => {{
-        $crate::ReturnAction::new(move || $e)
+        $crate::PureAction::new(move || $e)
     }};
     { get $cvar:ty } => {{
         $crate::GetAction::<$cvar>::new()
@@ -320,31 +340,31 @@ macro_rules! ctx {
     }};
     { let _ $(: $ty:ty)? = $e:expr; $($rem:tt)* } => {{
         $crate::BindAction::new(
-            $crate::ReturnAction::new(move || $e),
+            $crate::PureAction::new(move || $e),
             move |_ $(: $ty)?| $crate::ctx! { $($rem)* },
         )
     }};
     { let $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)* } => {{
         $crate::BindAction::new(
-            $crate::ReturnAction::new(move || $e),
+            $crate::PureAction::new(move || $e),
             move |$var $(: $ty)?| $crate::ctx! { $($rem)* },
         )
     }};
     { let mut $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)* } => {{
         $crate::BindAction::new(
-            $crate::ReturnAction::new(move || $e),
+            $crate::PureAction::new(move || $e),
             move |mut $var $(: $ty)?| $crate::ctx! { $($rem)* },
         )
     }};
     { let ref $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)* } => {{
         $crate::BindAction::new(
-            $crate::ReturnAction::new(move || $e),
+            $crate::PureAction::new(move || $e),
             move |ref $var $(: $ty)?| $crate::ctx! { $($rem)* },
         )
     }};
     { let ref mut $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)* } => {{
         $crate::BindAction::new(
-            $crate::ReturnAction::new(move || $e),
+            $crate::PureAction::new(move || $e),
             move |ref mut $var $(: $ty)?| $crate::ctx! { $($rem)* },
         )
     }};
@@ -362,13 +382,13 @@ macro_rules! ctx {
     }};
     { set $cvar:ty = $e:expr; $($rem:tt)* } => {{
         $crate::ctx! {
-            _ <- $crate::AssignAction::<$cvar, { $crate::ConstValue::new($e) }>::new();
+            $crate::SetAction::<$cvar, { $crate::ConstValue::new($e) }>::new();
             $($rem)*
         }
     }};
     { set $cvar:ty = $e:expr, where $($id:ident = $var:ty),+; $($rem:tt)* } => {{
         #[doc(hidden)]
-        struct __CustomAssignAction;
+        struct __CustomSetAction;
 
         #[doc(hidden)]
         struct __CustomVariableList<Input: $crate::VariableList>(::core::marker::PhantomData<Input>);
@@ -393,7 +413,7 @@ macro_rules! ctx {
         }
 
         #[doc(hidden)]
-        impl $crate::Action for __CustomAssignAction {
+        impl $crate::Action for __CustomSetAction {
             type Output = ();
             type Vars<Vars: $crate::VariableList> = __CustomVariableList<Vars>;
 
@@ -407,7 +427,13 @@ macro_rules! ctx {
         }
 
         $crate::ctx! {
-            _ <- __CustomAssignAction;
+            __CustomSetAction;
+            $($rem)*
+        }
+    }};
+    { unset $cvar:ty; $($rem:tt)* } => {{
+        $crate::ctx! {
+            $crate::UnsetAction::<$cvar>::new();
             $($rem)*
         }
     }};
@@ -490,6 +516,7 @@ fn test() {
         let ref mut _a: u32 = 0;
         type Temp = (u64, u64);
         set Temp = 0;
+        unset Temp;
     };
 
     assert_eq!(action.start_eval(), ());

@@ -5,7 +5,6 @@
 #![feature(const_heap)]
 #![feature(const_ptr_read)]
 #![feature(const_ptr_write)]
-#![feature(const_slice_from_raw_parts_mut)]
 #![feature(const_type_id)]
 #![feature(const_type_name)]
 #![feature(core_intrinsics)]

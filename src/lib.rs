@@ -294,67 +294,73 @@ macro_rules! ctx {
     { get $cvar:ty } => {{
         $crate::GetAction::<$cvar>::new()
     }};
+    { _ <- get $cvar:ty; $($rem:tt)*  } => {{
+        $crate::ctx! {
+            _ <- $crate::GetAction::<$cvar>::new();
+            $($rem)*
+        }
+    }};
     { _ <- $action:expr; $($rem:tt)*  } => {{
         $crate::BindAction::new(
             $action,
-            move |_| { $crate::ctx!($($rem)*) },
+            move |_| $crate::ctx! { $($rem)* },
         )
+    }};
+    { $var:ident <- get $cvar:ty; $($rem:tt)*  } => {{
+        $crate::ctx! {
+            $var <- $crate::GetAction::<$cvar>::new();
+            $($rem)*
+        }
     }};
     { $var:ident <- $action:expr; $($rem:tt)*  } => {{
         $crate::BindAction::new(
             $action,
-            move |$var| { $crate::ctx!($($rem)*) },
-        )
-    }};
-    { $var:ident <- get $cvar:ty; $($rem:tt)*  } => {{
-        $crate::BindAction::new(
-            $crate::GetAction::<$cvar>::new(),
-            move |$var| { $crate::ctx!($($rem)*) },
+            move |$var| $crate::ctx! { $($rem)* },
         )
     }};
     { let _ $(: $ty:ty)? = $e:expr; $($rem:tt)* } => {{
         $crate::BindAction::new(
             $crate::ReturnAction::new(move || $e),
-            move |_ $(: $ty)?| { $crate::ctx!($($rem)*) },
+            move |_ $(: $ty)?| $crate::ctx! { $($rem)* },
         )
     }};
     { let $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)* } => {{
         $crate::BindAction::new(
             $crate::ReturnAction::new(move || $e),
-            move |$var $(: $ty)?| { $crate::ctx!($($rem)*) },
+            move |$var $(: $ty)?| $crate::ctx! { $($rem)* },
         )
     }};
     { let mut $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)* } => {{
         $crate::BindAction::new(
             $crate::ReturnAction::new(move || $e),
-            move |mut $var $(: $ty)?| { $crate::ctx!($($rem)*) },
+            move |mut $var $(: $ty)?| $crate::ctx! { $($rem)* },
         )
     }};
     { let ref $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)* } => {{
         $crate::BindAction::new(
             $crate::ReturnAction::new(move || $e),
-            move |ref $var $(: $ty)?| { $crate::ctx!($($rem)*) },
+            move |ref $var $(: $ty)?| $crate::ctx! { $($rem)* },
         )
     }};
     { let ref mut $var:ident $(: $ty:ty)? = $e:expr; $($rem:tt)* } => {{
         $crate::BindAction::new(
             $crate::ReturnAction::new(move || $e),
-            move |ref mut $var $(: $ty)?| { $crate::ctx!($($rem)*) },
+            move |ref mut $var $(: $ty)?| $crate::ctx! { $($rem)* },
         )
     }};
     { const _: $t:ty = $e:expr; $($rem:tt)* } => {{
         const _: $t = $e;
-        $crate::ctx!($($rem)*)
+        $crate::ctx! { $($rem)* }
     }};
     { const $var:ident: $t:ty = $e:expr; $($rem:tt)* } => {{
         const $var: $t = $e;
-        $crate::ctx!($($rem)*)
+        $crate::ctx! { $($rem)* }
     }};
     { set $cvar:ty = $e:expr; $($rem:tt)* } => {{
-        $crate::BindAction::new(
-            $crate::AssignAction::<$cvar, { $crate::ConstValue::new($e) }>::new(),
-            move |_| { $crate::ctx!($($rem)*) },
-        )
+        $crate::ctx! {
+            _ <- $crate::AssignAction::<$cvar, { $crate::ConstValue::new($e) }>::new();
+            $($rem)*
+        }
     }};
     { set $cvar:ty = $e:expr, where $($id:ident = $var:ty),*; $($rem:tt)* } => {{
         #[doc(hidden)]
@@ -396,19 +402,19 @@ macro_rules! ctx {
             }
         }
 
-        $crate::BindAction::new(
-            __CustomAssignAction,
-            move |_| { $crate::ctx!($($rem)*) },
-        )
+        $crate::ctx! {
+            _ <- __CustomAssignAction;
+            $($rem)*
+        }
+    }};
+    { $action:expr; $($rem:tt)* } => {{
+        $crate::ctx! {
+            _ <- $action;
+            $($rem)*
+        }
     }};
     { $action:expr } => {{
         $action
-    }};
-    { $action:expr; $($rem:tt)* } => {{
-        $crate::BindAction::new(
-            $action,
-            move |_| { $crate::ctx!($($rem)*) },
-        )
     }};
 }
 

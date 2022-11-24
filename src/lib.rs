@@ -335,6 +335,25 @@ where
     fn eval<Vars: VariableList>(self) -> Self::Output {}
 }
 
+pub struct PanicAction<const MSG: &'static str>;
+
+impl<const MSG: &'static str> PanicAction<MSG> {
+    #[inline(always)]
+    pub const fn new() -> Self {
+        Self
+    }
+}
+
+impl<const MSG: &'static str> Action for PanicAction<MSG> {
+    type Output = ();
+    type Vars<Vars: VariableList> = Vars;
+
+    #[inline(always)]
+    fn eval<Vars: VariableList>(self) -> Self::Output {
+        const { panic!("{}", MSG) }
+    }
+}
+
 #[macro_export]
 macro_rules! ctx {
     { $($rest:tt)* } => {
@@ -551,6 +570,9 @@ macro_rules! ctx_action {
     }};
     (unset $cvar:ty) => {
         $crate::UnsetAction::<$cvar>::new()
+    };
+    (panic $msg:expr) => {
+        $crate::PanicAction::<{ $msg }>::new()
     };
     ($action:expr) => {
         $action

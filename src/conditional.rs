@@ -2,27 +2,52 @@ use core::marker::PhantomData;
 
 use crate::{Action, VariableList};
 
-pub trait IntoBoolFromVariableList {
-    type From<Vars: VariableList>: IntoBool;
-}
+pub trait TypeBool {}
+
+pub struct True;
+
+impl TypeBool for True {}
+
+pub struct False;
+
+impl TypeBool for False {}
 
 pub trait IntoBool {
     const BOOL: bool;
 }
 
-pub trait Select<Output> {
-    type Action: Action<Output = Output>;
+pub trait IntoBoolFromVariableList {
+    type From<Vars: VariableList>: IntoBool;
 }
 
-pub struct SelectAction<A, B, Cond: IntoBool, Output>(A, B, PhantomData<(Cond, Output)>)
-where
-    A: Action<Output = Output>,
-    B: Action<Output = Output>;
+pub trait IntoTypeBool {
+    type Into: TypeBool;
+}
 
-impl<A, B, Cond: IntoBool, Output> SelectAction<A, B, Cond, Output>
+impl<T: IntoBool> IntoTypeBool for T {
+    default type Into = False;
+}
+
+impl<T: IntoBool<BOOL = true>> IntoTypeBool for T {
+    type Into = True;
+}
+
+pub trait Select<Output> {
+    type Action: Action<Output = Output>;
+    fn selected(self) -> Self::Action;
+}
+
+pub struct SelectAction<A, B, Cond, Output>(A, B, PhantomData<(Cond, Output)>)
 where
     A: Action<Output = Output>,
     B: Action<Output = Output>,
+    Cond: TypeBool;
+
+impl<A, B, Cond, Output> SelectAction<A, B, Cond, Output>
+where
+    A: Action<Output = Output>,
+    B: Action<Output = Output>,
+    Cond: TypeBool,
 {
     #[inline(always)]
     pub const fn new(a: A, b: B) -> Self {
@@ -30,20 +55,42 @@ where
     }
 }
 
-impl<A, B, Cond: IntoBool, Output> Select<Output> for SelectAction<A, B, Cond, Output>
+impl<A, B, Cond, Output> Select<Output> for SelectAction<A, B, Cond, Output>
+where
+    A: Action<Output = Output>,
+    B: Action<Output = Output>,
+    Cond: TypeBool,
+{
+    default type Action = B;
+    default fn selected(self) -> Self::Action {
+        unreachable!()
+    }
+}
+
+impl<A, B, Output> Select<Output> for SelectAction<A, B, False, Output>
 where
     A: Action<Output = Output>,
     B: Action<Output = Output>,
 {
-    default type Action = B;
+    type Action = B;
+
+    #[inline(always)]
+    fn selected(self) -> Self::Action {
+        self.1
+    }
 }
 
-impl<A, B, Cond: IntoBool<BOOL = true>, Output> Select<Output> for SelectAction<A, B, Cond, Output>
+impl<A, B, Output> Select<Output> for SelectAction<A, B, True, Output>
 where
     A: Action<Output = Output>,
     B: Action<Output = Output>,
 {
     type Action = A;
+
+    #[inline(always)]
+    fn selected(self) -> Self::Action {
+        self.0
+    }
 }
 
 pub struct IfAction<A, B, Cond, Output>(A, B, PhantomData<(Cond, Output)>);
@@ -65,18 +112,19 @@ where
     B: Action<Output = Output>,
 {
     type Output = Output;
-    type Vars<Vars: VariableList> = <<SelectAction<A, B, Cond::From<Vars>, Output> as Select<
+    type Vars<Vars: VariableList> = <<SelectAction<
+        A,
+        B,
+        <Cond::From<Vars> as IntoTypeBool>::Into,
         Output,
-    >>::Action as Action>::Vars<Vars>;
+    > as Select<Output>>::Action as Action>::Vars<Vars>;
 
     #[inline(always)]
     fn eval<Vars: VariableList>(self) -> Self::Output {
         let Self(a, b, ..) = self;
-        if const { Cond::From::<Vars>::BOOL } {
-            a.eval::<Vars>()
-        } else {
-            b.eval::<Vars>()
-        }
+        SelectAction::<A, B, <Cond::From<Vars> as IntoTypeBool>::Into, Output>::new(a, b)
+            .selected()
+            .eval::<Vars>()
     }
 }
 
@@ -321,7 +369,7 @@ fn test() {
             if set Var then
                 ctx! { set Var2 = 42; }
             else
-                ctx! { }
+                ctx! { panic "Var doesn't exist."; }
         );
         get Var2
     };

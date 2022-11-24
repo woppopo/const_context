@@ -81,8 +81,13 @@ where
 }
 
 #[macro_export]
-macro_rules! ctx_if {
-    ($cond:expr, where $($id:ident = $var:ty),+; then { $a:expr } else { $b:expr }) => {{
+macro_rules! ctx_if_construct {
+    {
+        predicate = ( $cond:expr )
+        where = ($($id:ident = $var:ty),*)
+        then = ($then:expr)
+        else = ($else:expr)
+    }=> {
         #[doc(hidden)]
         struct __Condition;
 
@@ -105,7 +110,142 @@ macro_rules! ctx_if {
             };
         }
 
-        $crate::conditional::IfAction::<_, _, __Condition, _>::new($a, $b)
+        $crate::conditional::IfAction::<_, _, __Condition, _>::new($then, $else)
+    }
+}
+
+#[macro_export]
+macro_rules! ctx_if_else {
+    {
+        predicate = ($($predicate:tt)*)
+        where = ($($binding:tt)*)
+        then = ($($then:tt)*)
+        else = ($($else:tt)*)
+        rest = ()
+    } => {
+        $crate::ctx_if_construct! {
+            predicate = ($($predicate)*)
+            where = ($($binding)*)
+            then = ($($then)*)
+            else = ($($else)*)
+        }
+    };
+    {
+        predicate = ($($predicate:tt)*)
+        where = ($($binding:tt)*)
+        then = ($($then:tt)*)
+        else = ($($else:tt)*)
+        rest = ($e:tt $($rest:tt)*)
+    } => {
+        $crate::ctx_if_else! {
+            predicate = ($($predicate)*)
+            where = ($($binding)*)
+            then = ($($then)*)
+            else = ($($else)* $e)
+            rest = ($($rest)*)
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! ctx_if_then {
+    {
+        predicate = ($($predicate:tt)*)
+        where = ($($binding:tt)*)
+        then = ($($then:tt)*)
+        rest = (else $($rest:tt)*)
+    } => {
+        $crate::ctx_if_else! {
+            predicate = ($($predicate)*)
+            where = ($($binding)*)
+            then = ($($then)*)
+            else = ()
+            rest = ($($rest)*)
+        }
+    };
+    {
+        predicate = ($($predicate:tt)*)
+        where = ($($binding:tt)*)
+        then = ($($then:tt)*)
+        rest = ($e:tt $($rest:tt)*)
+    } => {
+        $crate::ctx_if_then! {
+            predicate = ($($predicate)*)
+            where = ($($binding)*)
+            then = ($($then)* $e)
+            rest = ($($rest)*)
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! ctx_if_where {
+    {
+        predicate = ($($predicate:tt)*)
+        where = ($($binding:tt)*)
+        rest = (then $($rest:tt)*)
+    } => {
+        $crate::ctx_if_then! {
+            predicate = ($($predicate)*)
+            where = ($($binding)*)
+            then = ()
+            rest = ($($rest)*)
+        }
+    };
+    {
+        predicate = ($($predicate:tt)*)
+        where = ($($binding:tt)*)
+        rest = ($where:tt $($rest:tt)*)
+    } => {
+        $crate::ctx_if_where! {
+            predicate = ($($predicate)*)
+            where = ($($binding)* $where)
+            rest = ($($rest)*)
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! ctx_if_predicate {
+    {
+        predicate = ($($predicate:tt)*)
+        rest = (where $($rest:tt)*)
+    } => {
+        $crate::ctx_if_where! {
+            predicate = ($($predicate)*)
+            where = ()
+            rest = ($($rest)*)
+        }
+    };
+    {
+        predicate = ($($predicate:tt)*)
+        rest = (then $($rest:tt)*)
+    } => {
+        $crate::ctx_if_then! {
+            predicate = ($($predicate)*)
+            where = ()
+            then = ()
+            rest = ($($rest)*)
+        }
+    };
+    {
+        predicate = ($($predicate:tt)*)
+        rest = ($cond:tt $($rest:tt)*)
+    } => {
+        $crate::ctx_if_predicate! {
+            predicate = ($($predicate)* $cond)
+            rest = ($($rest)*)
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! ctx_if {
+    (if $($rest:tt)*) => {{
+        $crate::ctx_if_predicate! {
+            predicate = ()
+            rest = ($($rest)*)
+        }
     }};
 }
 
@@ -120,9 +260,10 @@ fn test() {
     let action = ctx! {
         set Var = 45;
         ctx_if!(
-            a + b == 90, where a = Var, b = Var;
-            then { ctx! { pure "==" } }
-            else { ctx! { pure "!=" } }
+            if a + b == 90 where a = Var, b = Var then
+                ctx! { pure "==" }
+            else
+                ctx! { pure "!=" }
         )
     };
     assert_eq!(action.start_eval(), "==");
@@ -130,9 +271,10 @@ fn test() {
     let action = ctx! {
         set Var = 45;
         ctx_if!(
-            a + b == 90, where a = Var, b = Var;
-            then { ctx! { set Var2 = 42; } }
-            else { ctx! { } }
+            if a + b == 90 where a = Var, b = Var then
+                ctx! { set Var2 = 42; }
+            else
+                ctx! { }
         );
         get Var2
     };

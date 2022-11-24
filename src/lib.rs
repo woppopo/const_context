@@ -207,26 +207,46 @@ where
     }
 }
 
-pub struct PureAction<Closure>(Closure);
+pub struct LazyAction<Closure>(Closure);
 
-impl<Closure> PureAction<Closure> {
+impl<Closure> LazyAction<Closure> {
     #[inline(always)]
     pub const fn new(closure: Closure) -> Self {
         Self(closure)
     }
 }
 
-impl<Closure, Ret> Action for PureAction<Closure>
+impl<Closure, A> Action for LazyAction<Closure>
 where
-    Closure: FnOnce() -> Ret,
+    Closure: FnOnce() -> A,
+    A: Action,
 {
-    type Output = Ret;
-    type Vars<Vars: VariableList> = Vars;
+    type Output = A::Output;
+    type Vars<Vars: VariableList> = A::Vars<Vars>;
 
     #[inline(always)]
     fn eval<Vars: VariableList>(self) -> Self::Output {
         let Self(closure) = self;
-        closure()
+        closure().eval::<Vars>()
+    }
+}
+
+pub struct PureAction<Value>(Value);
+
+impl<Value> PureAction<Value> {
+    #[inline(always)]
+    pub const fn new(value: Value) -> Self {
+        Self(value)
+    }
+}
+
+impl<Value> Action for PureAction<Value> {
+    type Output = Value;
+    type Vars<Vars: VariableList> = Vars;
+
+    #[inline(always)]
+    fn eval<Vars: VariableList>(self) -> Self::Output {
+        self.0
     }
 }
 
@@ -294,17 +314,24 @@ where
 
 #[macro_export]
 macro_rules! ctx {
+    { $($rest:tt)* } => {{
+        $crate::LazyAction::new(move || $crate::ctx_parse! { $($rest)* })
+    }}
+}
+
+#[macro_export]
+macro_rules! ctx_parse {
     {} => {{
-        $crate::PureAction::new(move || ())
+        $crate::PureAction::new(())
     }};
     { pure $e:expr } => {{
-        $crate::PureAction::new(move || $e)
+        $crate::PureAction::new($e)
     }};
     { get $cvar:ty } => {{
         $crate::GetAction::<$cvar>::new()
     }};
     { _ <- get $cvar:ty; $($rest:tt)*  } => {{
-        $crate::ctx! {
+        $crate::ctx_parse! {
             _ <- $crate::GetAction::<$cvar>::new();
             $($rest)*
         }
@@ -312,11 +339,11 @@ macro_rules! ctx {
     { _ <- $action:expr; $($rest:tt)*  } => {{
         $crate::BindAction::new(
             $action,
-            move |_| $crate::ctx! { $($rest)* },
+            move |_| $crate::ctx_parse! { $($rest)* },
         )
     }};
     { $var:ident <- get $cvar:ty; $($rest:tt)*  } => {{
-        $crate::ctx! {
+        $crate::ctx_parse! {
             $var <- $crate::GetAction::<$cvar>::new();
             $($rest)*
         }
@@ -324,56 +351,56 @@ macro_rules! ctx {
     { $var:ident <- $action:expr; $($rest:tt)*  } => {{
         $crate::BindAction::new(
             $action,
-            move |$var| $crate::ctx! { $($rest)* },
+            move |$var| $crate::ctx_parse! { $($rest)* },
         )
     }};
     { let _ $(: $ty:ty)? = $e:expr; $($rest:tt)* } => {{
         $crate::BindAction::new(
-            $crate::PureAction::new(move || $e),
-            move |_ $(: $ty)?| $crate::ctx! { $($rest)* },
+            $crate::PureAction::new($e),
+            move |_ $(: $ty)?| $crate::ctx_parse! { $($rest)* },
         )
     }};
     { let $var:ident $(: $ty:ty)? = $e:expr; $($rest:tt)* } => {{
         $crate::BindAction::new(
-            $crate::PureAction::new(move || $e),
-            move |$var $(: $ty)?| $crate::ctx! { $($rest)* },
+            $crate::PureAction::new($e),
+            move |$var $(: $ty)?| $crate::ctx_parse! { $($rest)* },
         )
     }};
     { let mut $var:ident $(: $ty:ty)? = $e:expr; $($rest:tt)* } => {{
         $crate::BindAction::new(
-            $crate::PureAction::new(move || $e),
-            move |mut $var $(: $ty)?| $crate::ctx! { $($rest)* },
+            $crate::PureAction::new($e),
+            move |mut $var $(: $ty)?| $crate::ctx_parse! { $($rest)* },
         )
     }};
     { let ref $var:ident $(: $ty:ty)? = $e:expr; $($rest:tt)* } => {{
         $crate::BindAction::new(
-            $crate::PureAction::new(move || $e),
-            move |ref $var $(: $ty)?| $crate::ctx! { $($rest)* },
+            $crate::PureAction::new($e),
+            move |ref $var $(: $ty)?| $crate::ctx_parse! { $($rest)* },
         )
     }};
     { let ref mut $var:ident $(: $ty:ty)? = $e:expr; $($rest:tt)* } => {{
         $crate::BindAction::new(
-            $crate::PureAction::new(move || $e),
-            move |ref mut $var $(: $ty)?| $crate::ctx! { $($rest)* },
+            $crate::PureAction::new($e),
+            move |ref mut $var $(: $ty)?| $crate::ctx_parse! { $($rest)* },
         )
     }};
     { const _: $ty:ty = $value:expr; $($rest:tt)* } => {{
         const _: $ty = $value;
-        $crate::ctx! { $($rest)* }
+        $crate::ctx_parse! { $($rest)* }
     }};
     { const $name:ident: $ty:ty = $value:expr; $($rest:tt)* } => {{
         const $name: $ty = $value;
-        $crate::ctx! { $($rest)* }
+        $crate::ctx_parse! { $($rest)* }
     }};
     { type $name:ident = $ty:ty; $($rest:tt)* } => {{
         type $name = $ty;
-        $crate::ctx! { $($rest)* }
+        $crate::ctx_parse! { $($rest)* }
     }};
     { set $cvar:ty = $e:expr; $($rest:tt)* } => {{
         #[doc(hidden)]
         type __Value = <$cvar as $crate::ConstVariable>::Value;
 
-        $crate::ctx! {
+        $crate::ctx_parse! {
             $crate::SetAction::<$cvar, { $crate::ConstValue::new::<__Value>($e) }>::new();
             $($rest)*
         }
@@ -419,19 +446,19 @@ macro_rules! ctx {
             }
         }
 
-        $crate::ctx! {
+        $crate::ctx_parse! {
             __CustomSetAction;
             $($rest)*
         }
     }};
     { unset $cvar:ty; $($rest:tt)* } => {{
-        $crate::ctx! {
+        $crate::ctx_parse! {
             $crate::UnsetAction::<$cvar>::new();
             $($rest)*
         }
     }};
     { $action:expr; $($rest:tt)* } => {{
-        $crate::ctx! {
+        $crate::ctx_parse! {
             _ <- $action;
             $($rest)*
         }
@@ -513,4 +540,14 @@ fn test() {
     };
 
     assert_eq!(action.start_eval(), ());
+
+    let action = ctx! {
+        let mut a = 0;
+        let _ = { a += 1; };
+        let _ = { a += 1; };
+        let _ = { a += 1; };
+        pure a
+    };
+
+    assert_eq!(action.start_eval(), 3);
 }

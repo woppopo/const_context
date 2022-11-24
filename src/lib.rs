@@ -124,8 +124,9 @@ const fn error_unexpected_type<Expected, Value>() -> &'static str {
 }
 
 #[track_caller]
-pub const fn find_variable<Key, Value, List: VariableList>() -> Value
+pub const fn find_variable<List, Key, Value>() -> Value
 where
+    List: VariableList,
     Key: 'static,
     Value: 'static,
 {
@@ -142,7 +143,29 @@ where
             );
             value.with_type()
         }
-        _ => find_variable::<Key, Value, List::Next>(),
+        _ => find_variable::<List::Next, Key, Value>(),
+    }
+}
+
+#[track_caller]
+pub const fn is_variable_in<List, Key, Value>() -> bool
+where
+    List: VariableList,
+    Key: 'static,
+    Value: 'static,
+{
+    match List::VALUE {
+        VariableListValue::End => false,
+        VariableListValue::Removed if type_eq::<Key, List::Key>() => false,
+        VariableListValue::Has(_) if type_eq::<Key, List::Key>() => {
+            assert!(
+                type_eq::<Value, List::Value>(),
+                "{}",
+                error_unexpected_type::<Value, List::Value>()
+            );
+            true
+        }
+        _ => is_variable_in::<List::Next, Key, Value>(),
     }
 }
 
@@ -268,7 +291,7 @@ where
 
     #[inline(always)]
     fn eval<Vars: VariableList>(self) -> Self::Output {
-        const { find_variable::<Variable::Key, Variable::Value, Vars>() }
+        const { find_variable::<Vars, Variable::Key, Variable::Value>() }
     }
 }
 
@@ -425,9 +448,9 @@ macro_rules! ctx_parse {
             type Value = __Value;
             const VALUE: $crate::VariableListValue<$crate::ConstValue> = $crate::VariableListValue::Has({
                 $(let $id = $crate::find_variable::<
+                    Input,
                     <$var as $crate::ConstVariable>::Key,
-                    <$var as $crate::ConstVariable>::Value,
-                    Input>();)*
+                    <$var as $crate::ConstVariable>::Value>();)*
                 $crate::ConstValue::new::<__Value>($e)
             });
         }

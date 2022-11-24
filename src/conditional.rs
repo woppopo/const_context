@@ -83,11 +83,40 @@ where
 #[macro_export]
 macro_rules! ctx_if_construct {
     {
+        predicate = (set $var:ty)
+        where = ()
+        then = ($then:expr)
+        else = ($else:expr)
+    }=> {{
+        #[doc(hidden)]
+        struct __Condition;
+
+        #[doc(hidden)]
+        impl $crate::conditional::IntoBoolFromVariableList for __Condition {
+            type From<Vars: $crate::VariableList> = __ConditionBool<Vars>;
+        }
+
+        #[doc(hidden)]
+        struct __ConditionBool<Vars: $crate::VariableList>(::core::marker::PhantomData<Vars>);
+
+        #[doc(hidden)]
+        impl<Vars: $crate::VariableList> $crate::conditional::IntoBool for __ConditionBool<Vars> {
+            const BOOL: bool = {
+                $crate::is_variable_in::<
+                    Vars,
+                    <$var as $crate::ConstVariable>::Key,
+                    <$var as $crate::ConstVariable>::Value>()
+            };
+        }
+
+        $crate::conditional::IfAction::<_, _, __Condition, _>::new($then, $else)
+    }};
+    {
         predicate = ( $cond:expr )
         where = ($($id:ident = $var:ty),*)
         then = ($then:expr)
         else = ($else:expr)
-    }=> {
+    } => {{
         #[doc(hidden)]
         struct __Condition;
 
@@ -103,15 +132,15 @@ macro_rules! ctx_if_construct {
         impl<Vars: $crate::VariableList> $crate::conditional::IntoBool for __ConditionBool<Vars> {
             const BOOL: bool = {
                 $(let $id = $crate::find_variable::<
+                    Vars,
                     <$var as $crate::ConstVariable>::Key,
-                    <$var as $crate::ConstVariable>::Value,
-                    Vars>();)*
+                    <$var as $crate::ConstVariable>::Value>();)*
                 $cond
             };
         }
 
         $crate::conditional::IfAction::<_, _, __Condition, _>::new($then, $else)
-    }
+    }}
 }
 
 #[macro_export]
@@ -241,12 +270,18 @@ macro_rules! ctx_if_predicate {
 
 #[macro_export]
 macro_rules! ctx_if {
-    (if $($rest:tt)*) => {{
+    (if set $($rest:tt)*) => {
+        $crate::ctx_if_predicate! {
+            predicate = (set)
+            rest = ($($rest)*)
+        }
+    };
+    (if $($rest:tt)*) => {
         $crate::ctx_if_predicate! {
             predicate = ()
             rest = ($($rest)*)
         }
-    }};
+    };
 }
 
 #[test]
@@ -272,6 +307,18 @@ fn test() {
         set Var = 45;
         ctx_if!(
             if a + b == 90 where a = Var, b = Var then
+                ctx! { set Var2 = 42; }
+            else
+                ctx! { }
+        );
+        get Var2
+    };
+    assert_eq!(action.start_eval(), 42);
+
+    let action = ctx! {
+        set Var = 45;
+        ctx_if!(
+            if set Var then
                 ctx! { set Var2 = 42; }
             else
                 ctx! { }

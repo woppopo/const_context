@@ -337,95 +337,180 @@ where
 
 #[macro_export]
 macro_rules! ctx {
-    { $($rest:tt)* } => {{
-        $crate::LazyAction::new(move || $crate::ctx_parse! { $($rest)* })
-    }}
+    { $($rest:tt)* } => {
+        $crate::LazyAction::new(move || $crate::ctx_parse! {
+            action = ()
+            rest = ($($rest)*)
+        })
+    }
 }
 
 #[macro_export]
 macro_rules! ctx_parse {
-    {} => {{
-        $crate::PureAction::new(())
-    }};
-    { pure $e:expr } => {{
-        $crate::PureAction::new($e)
-    }};
-    { get $cvar:ty } => {{
-        $crate::GetAction::<$cvar>::new()
-    }};
-    { _ <- get $cvar:ty; $($rest:tt)*  } => {{
+    {
+        action = ()
+        rest = ()
+    } => {
+        $crate::ctx_action!()
+    };
+    {
+        action = ($($action:tt)*)
+        rest = ()
+    } => {
+        $crate::ctx_action!($($action)*)
+    };
+    {
+        action = (_ <- $($action:tt)*)
+        rest = (; $($rest:tt)*)
+    } => {
+        $crate::BindAction::new(
+            $crate::ctx_action!($($action)*),
+            move |_| $crate::ctx_parse! {
+                action = ()
+                rest = ($($rest)*)
+            },
+        )
+    };
+    {
+        action = ($var:ident <- $($action:tt)*)
+        rest = (; $($rest:tt)*)
+    } => {
+        $crate::BindAction::new(
+            $crate::ctx_action!($($action)*),
+            move |$var| $crate::ctx_parse! {
+                action = ()
+                rest = ($($rest)*)
+            },
+        )
+    };
+    {
+        action = (let _ $(: $ty:ty)? = $($e:tt)*)
+        rest = (; $($rest:tt)*)
+    } => {
+        $crate::BindAction::new(
+            $crate::PureAction::new($($e)*),
+            move |_ $(: $ty)?| $crate::ctx_parse! {
+                action = ()
+                rest = ($($rest)*)
+            },
+        )
+    };
+    {
+        action = (let $var:ident $(: $ty:ty)? = $($e:tt)*)
+        rest = (; $($rest:tt)*)
+    } => {
+        $crate::BindAction::new(
+            $crate::PureAction::new($($e)*),
+            move |$var $(: $ty)?| $crate::ctx_parse! {
+                action = ()
+                rest = ($($rest)*)
+            },
+        )
+    };
+    {
+        action = (let mut $var:ident $(: $ty:ty)? = $($e:tt)*)
+        rest = (; $($rest:tt)*)
+    } => {
+        $crate::BindAction::new(
+            $crate::PureAction::new($($e)*),
+            move |mut $var $(: $ty)?| $crate::ctx_parse! {
+                action = ()
+                rest = ($($rest)*)
+            },
+        )
+    };
+    {
+        action = (let ref $var:ident $(: $ty:ty)? = $($e:tt)*)
+        rest = (; $($rest:tt)*)
+    } => {
+        $crate::BindAction::new(
+            $crate::PureAction::new($($e)*),
+            move |ref $var $(: $ty)?| $crate::ctx_parse! {
+                action = ()
+                rest = ($($rest)*)
+            },
+        )
+    };
+    {
+        action = (let ref mut $var:ident $(: $ty:ty)? = $($e:tt)*)
+        rest = (; $($rest:tt)*)
+    } => {
+        $crate::BindAction::new(
+            $crate::PureAction::new($($e)*),
+            move |ref mut $var $(: $ty)?| $crate::ctx_parse! {
+                action = ()
+                rest = ($($rest)*)
+            },
+        )
+    };
+    {
+        action = (const _ : $ty:ty = $e:expr)
+        rest = (; $($rest:tt)*)
+    } => {{
+        const _ : $ty = $e;
         $crate::ctx_parse! {
-            _ <- $crate::GetAction::<$cvar>::new();
-            $($rest)*
+            action = ()
+            rest = ($($rest)*)
         }
     }};
-    { _ <- $action:expr; $($rest:tt)*  } => {{
-        $crate::BindAction::new(
-            $action,
-            move |_| $crate::ctx_parse! { $($rest)* },
-        )
-    }};
-    { $var:ident <- get $cvar:ty; $($rest:tt)*  } => {{
+    {
+        action = (const $name:ident : $ty:ty = $e:expr)
+        rest = (; $($rest:tt)*)
+    } => {{
+        const $name : $ty = $e;
         $crate::ctx_parse! {
-            $var <- $crate::GetAction::<$cvar>::new();
-            $($rest)*
+            action = ()
+            rest = ($($rest)*)
         }
     }};
-    { $var:ident <- $action:expr; $($rest:tt)*  } => {{
-        $crate::BindAction::new(
-            $action,
-            move |$var| $crate::ctx_parse! { $($rest)* },
-        )
-    }};
-    { let _ $(: $ty:ty)? = $e:expr; $($rest:tt)* } => {{
-        $crate::BindAction::new(
-            $crate::PureAction::new($e),
-            move |_ $(: $ty)?| $crate::ctx_parse! { $($rest)* },
-        )
-    }};
-    { let $var:ident $(: $ty:ty)? = $e:expr; $($rest:tt)* } => {{
-        $crate::BindAction::new(
-            $crate::PureAction::new($e),
-            move |$var $(: $ty)?| $crate::ctx_parse! { $($rest)* },
-        )
-    }};
-    { let mut $var:ident $(: $ty:ty)? = $e:expr; $($rest:tt)* } => {{
-        $crate::BindAction::new(
-            $crate::PureAction::new($e),
-            move |mut $var $(: $ty)?| $crate::ctx_parse! { $($rest)* },
-        )
-    }};
-    { let ref $var:ident $(: $ty:ty)? = $e:expr; $($rest:tt)* } => {{
-        $crate::BindAction::new(
-            $crate::PureAction::new($e),
-            move |ref $var $(: $ty)?| $crate::ctx_parse! { $($rest)* },
-        )
-    }};
-    { let ref mut $var:ident $(: $ty:ty)? = $e:expr; $($rest:tt)* } => {{
-        $crate::BindAction::new(
-            $crate::PureAction::new($e),
-            move |ref mut $var $(: $ty)?| $crate::ctx_parse! { $($rest)* },
-        )
-    }};
-    { const _: $ty:ty = $value:expr; $($rest:tt)* } => {{
-        const _: $ty = $value;
-        $crate::ctx_parse! { $($rest)* }
-    }};
-    { const $name:ident: $ty:ty = $value:expr; $($rest:tt)* } => {{
-        const $name: $ty = $value;
-        $crate::ctx_parse! { $($rest)* }
-    }};
-    { type $name:ident = $ty:ty; $($rest:tt)* } => {{
+    {
+        action = (type $name:ident = $ty:ty)
+        rest = (; $($rest:tt)*)
+    } => {{
         type $name = $ty;
-        $crate::ctx_parse! { $($rest)* }
-    }};
-    { set $var:ty = $e:expr; $($rest:tt)* } => {{
         $crate::ctx_parse! {
-            $crate::SetAction::<$var, { $crate::ConstValue::new::<<$var as $crate::ConstVariable>::Value>($e) }>::new();
-            $($rest)*
+            action = ()
+            rest = ($($rest)*)
         }
     }};
-    { set $cvar:ident $(<$($generic:ident),*>)? = $e:expr, where $($id:ident = $var:ident $(<$($vgeneric:ident),*>)?),+; $($rest:tt)* } => {{
+    {
+        action = ($($action:tt)*)
+        rest = (; $($rest:tt)*)
+    } => {
+        $crate::BindAction::new(
+            $crate::ctx_action!($($action)*),
+            move |_| $crate::ctx_parse! {
+                action = ()
+                rest = ($($rest)*)
+            },
+        )
+    };
+    {
+        action = ($($action:tt)*)
+        rest = ($other:tt $($rest:tt)*)
+    } => {
+        $crate::ctx_parse! {
+            action = ($($action)* $other)
+            rest = ($($rest)*)
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! ctx_action {
+    () => {
+        $crate::PureAction::new(())
+    };
+    (pure $e:expr) => {
+        $crate::PureAction::new($e)
+    };
+    (get $cvar:ty) => {
+        $crate::GetAction::<$cvar>::new()
+    };
+    (set $var:ty = $e:expr) => {
+        $crate::SetAction::<$var, { $crate::ConstValue::new::<<$var as $crate::ConstVariable>::Value>($e) }>::new()
+    };
+    (set $cvar:ident $(<$($generic:ident),*>)? = $e:expr, where $($id:ident = $var:ident $(<$($vgeneric:ident),*>)?),+) => {{
         #[doc(hidden)]
         #[allow(unused_parens)]
         struct __CustomSetAction<$($($generic),*)?>(::core::marker::PhantomData<($($($generic),*)?)>);
@@ -462,26 +547,14 @@ macro_rules! ctx_parse {
             }
         }
 
-        $crate::ctx_parse! {
-            __CustomSetAction::<$($($generic),*)?>(::core::marker::PhantomData);
-            $($rest)*
-        }
+        __CustomSetAction::<$($($generic),*)?>(::core::marker::PhantomData)
     }};
-    { unset $cvar:ty; $($rest:tt)* } => {{
-        $crate::ctx_parse! {
-            $crate::UnsetAction::<$cvar>::new();
-            $($rest)*
-        }
-    }};
-    { $action:expr; $($rest:tt)* } => {{
-        $crate::ctx_parse! {
-            _ <- $action;
-            $($rest)*
-        }
-    }};
-    { $action:expr } => {{
+    (unset $cvar:ty) => {
+        $crate::UnsetAction::<$cvar>::new()
+    };
+    ($action:expr) => {
         $action
-    }};
+    };
 }
 
 #[test]

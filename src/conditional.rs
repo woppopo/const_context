@@ -131,33 +131,33 @@ where
 #[macro_export]
 macro_rules! ctx_if_construct {
     {
-        predicate = (set $var:ty)
+        predicate = (set $var:ident $(<$($param:ident),*>)?)
         where = ()
         then = ($then:expr)
         else = ($else:expr)
     }=> {{
         #[doc(hidden)]
-        struct __Condition;
+        struct __Condition<$($($param),*)?>(::core::marker::PhantomData<($($($param,)*)?)>);
 
         #[doc(hidden)]
-        impl $crate::conditional::IntoBoolFromVariableList for __Condition {
-            type From<Vars: $crate::VariableList> = __ConditionBool<Vars>;
+        impl<$($($param : 'static),*)?> $crate::conditional::IntoBoolFromVariableList for __Condition<$($($param),*)?> {
+            type From<Vars: $crate::VariableList> = __ConditionBool<$($($param,)*)? Vars>;
         }
 
         #[doc(hidden)]
-        struct __ConditionBool<Vars: $crate::VariableList>(::core::marker::PhantomData<Vars>);
+        struct __ConditionBool<$($($param,)*)? Vars: $crate::VariableList>(::core::marker::PhantomData<($($($param,)*)? Vars,)>);
 
         #[doc(hidden)]
-        impl<Vars: $crate::VariableList> $crate::conditional::IntoBool for __ConditionBool<Vars> {
+        impl<$($($param : 'static,)*)? Vars: $crate::VariableList> $crate::conditional::IntoBool for __ConditionBool<$($($param,)*)? Vars> {
             const BOOL: bool = {
                 $crate::is_variable_in::<
                     Vars,
-                    <$var as $crate::ConstVariable>::Key,
-                    <$var as $crate::ConstVariable>::Value>()
+                    <$var <$($($param),*)?> as $crate::ConstVariable>::Key,
+                    <$var <$($($param),*)?> as $crate::ConstVariable>::Value>()
             };
         }
 
-        $crate::conditional::IfAction::<_, _, __Condition, _>::new($then, $else)
+        $crate::conditional::IfAction::<_, _, __Condition<$($($param),*)?>, _>::new($then, $else)
     }};
     {
         predicate = ( $cond:expr )

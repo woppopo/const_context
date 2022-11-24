@@ -427,42 +427,6 @@ macro_rules! ctx_parse {
         )
     };
     {
-        action = (let mut $var:ident $(: $ty:ty)? = $($e:tt)*)
-        rest = (; $($rest:tt)*)
-    } => {
-        $crate::BindAction::new(
-            $crate::PureAction::new($($e)*),
-            move |mut $var $(: $ty)?| $crate::ctx_parse! {
-                action = ()
-                rest = ($($rest)*)
-            },
-        )
-    };
-    {
-        action = (let ref $var:ident $(: $ty:ty)? = $($e:tt)*)
-        rest = (; $($rest:tt)*)
-    } => {
-        $crate::BindAction::new(
-            $crate::PureAction::new($($e)*),
-            move |ref $var $(: $ty)?| $crate::ctx_parse! {
-                action = ()
-                rest = ($($rest)*)
-            },
-        )
-    };
-    {
-        action = (let ref mut $var:ident $(: $ty:ty)? = $($e:tt)*)
-        rest = (; $($rest:tt)*)
-    } => {
-        $crate::BindAction::new(
-            $crate::PureAction::new($($e)*),
-            move |ref mut $var $(: $ty)?| $crate::ctx_parse! {
-                action = ()
-                rest = ($($rest)*)
-            },
-        )
-    };
-    {
         action = (const _ : $ty:ty = $e:expr)
         rest = (; $($rest:tt)*)
     } => {{
@@ -638,26 +602,11 @@ fn test() {
 
     let action = ctx! {
         let _a = 0;
-        let mut _a = 0;
-        let ref _a = 0;
-        let ref mut _a = 0;
         let _a: u32 = 0;
-        let mut _a: u32 = 0;
-        let ref _a: u32 = 0;
-        let ref mut _a: u32 = 0;
         type Temp = (u64, u64);
         set Temp = 0;
         unset Temp;
     };
 
     assert_eq!(action.start_eval(), ());
-
-    let action = ctx! {
-        let mut a = 0;
-        let _ = { a += 1; };
-        let _ = { a += 1; };
-        let _ = { a += 1; };
-        pure a
-    };
-    assert_eq!(action.start_eval(), 3);
 }

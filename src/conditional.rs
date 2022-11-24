@@ -10,37 +10,16 @@ pub trait IntoBool {
     const BOOL: bool;
 }
 
-pub trait BoolToTypeBool {
-    type Into: TypeBool;
-}
-
-pub trait TypeBool {}
-
-pub struct True;
-
-pub struct False;
-
-impl TypeBool for True {}
-impl TypeBool for False {}
-
-impl<Cond: IntoBool> BoolToTypeBool for Cond {
-    default type Into = False;
-}
-
-impl<Cond: IntoBool<BOOL = true>> BoolToTypeBool for Cond {
-    type Into = True;
-}
-
 pub trait Select<Output> {
     type Action: Action<Output = Output>;
 }
 
-pub struct SelectAction<A, B, Cond: TypeBool, Output>(A, B, PhantomData<(Cond, Output)>)
+pub struct SelectAction<A, B, Cond: IntoBool, Output>(A, B, PhantomData<(Cond, Output)>)
 where
     A: Action<Output = Output>,
     B: Action<Output = Output>;
 
-impl<A, B, Cond: TypeBool, Output> SelectAction<A, B, Cond, Output>
+impl<A, B, Cond: IntoBool, Output> SelectAction<A, B, Cond, Output>
 where
     A: Action<Output = Output>,
     B: Action<Output = Output>,
@@ -51,7 +30,7 @@ where
     }
 }
 
-impl<A, B, Cond: TypeBool, Output> Select<Output> for SelectAction<A, B, Cond, Output>
+impl<A, B, Cond: IntoBool, Output> Select<Output> for SelectAction<A, B, Cond, Output>
 where
     A: Action<Output = Output>,
     B: Action<Output = Output>,
@@ -59,7 +38,7 @@ where
     default type Action = B;
 }
 
-impl<A, B, Output> Select<Output> for SelectAction<A, B, True, Output>
+impl<A, B, Cond: IntoBool<BOOL = true>, Output> Select<Output> for SelectAction<A, B, Cond, Output>
 where
     A: Action<Output = Output>,
     B: Action<Output = Output>,
@@ -86,15 +65,14 @@ where
     B: Action<Output = Output>,
 {
     type Output = Output;
-    type Vars<Vars: VariableList> =
-        <<SelectAction<A, B, <Cond::From<Vars> as BoolToTypeBool>::Into, Output> as Select<
-            Output,
-        >>::Action as Action>::Vars<Vars>;
+    type Vars<Vars: VariableList> = <<SelectAction<A, B, Cond::From<Vars>, Output> as Select<
+        Output,
+    >>::Action as Action>::Vars<Vars>;
 
     #[inline(always)]
     fn eval<Vars: VariableList>(self) -> Self::Output {
         let Self(a, b, ..) = self;
-        if const { <Cond::From<Vars> as IntoBool>::BOOL } {
+        if const { Cond::From::<Vars>::BOOL } {
             a.eval::<Vars>()
         } else {
             b.eval::<Vars>()

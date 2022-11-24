@@ -419,46 +419,39 @@ macro_rules! ctx_parse {
         type $name = $ty;
         $crate::ctx_parse! { $($rest)* }
     }};
-    { set $cvar:ty = $e:expr; $($rest:tt)* } => {{
-        #[doc(hidden)]
-        type __Value = <$cvar as $crate::ConstVariable>::Value;
-
+    { set $var:ty = $e:expr; $($rest:tt)* } => {{
         $crate::ctx_parse! {
-            $crate::SetAction::<$cvar, { $crate::ConstValue::new::<__Value>($e) }>::new();
+            $crate::SetAction::<$var, { $crate::ConstValue::new::<<$var as $crate::ConstVariable>::Value>($e) }>::new();
             $($rest)*
         }
     }};
-    { set $cvar:ty = $e:expr, where $($id:ident = $var:ty),+; $($rest:tt)* } => {{
+    { set $cvar:ident $(<$($generic:ident),*>)? = $e:expr, where $($id:ident = $var:ident $(<$($vgeneric:ident),*>)?),+; $($rest:tt)* } => {{
         #[doc(hidden)]
-        type __Key = <$cvar as $crate::ConstVariable>::Key;
+        #[allow(unused_parens)]
+        struct __CustomSetAction<$($($generic),*)?>(::core::marker::PhantomData<($($($generic),*)?)>);
 
         #[doc(hidden)]
-        type __Value = <$cvar as $crate::ConstVariable>::Value;
+        #[allow(unused_parens)]
+        struct __CustomVariableList<$($($generic,)*)? Input: $crate::VariableList,>(::core::marker::PhantomData<($($($generic,)*)? Input)>);
 
         #[doc(hidden)]
-        struct __CustomSetAction;
-
-        #[doc(hidden)]
-        struct __CustomVariableList<Input: $crate::VariableList>(::core::marker::PhantomData<Input>);
-
-        #[doc(hidden)]
-        impl<Input: $crate::VariableList> $crate::VariableList for __CustomVariableList<Input> {
+        impl<$($($generic : 'static,)*)? Input: $crate::VariableList> $crate::VariableList for __CustomVariableList<$($($generic,)*)? Input> {
             type Next = Input;
-            type Key = __Key;
-            type Value = __Value;
+            type Key = <$cvar $(<$($generic),*>)? as $crate::ConstVariable>::Key;
+            type Value = <$cvar $(<$($generic),*>)? as $crate::ConstVariable>::Value;
             const VALUE: $crate::VariableListValue<$crate::ConstValue> = $crate::VariableListValue::Has({
                 $(let $id = $crate::find_variable::<
                     Input,
-                    <$var as $crate::ConstVariable>::Key,
-                    <$var as $crate::ConstVariable>::Value>();)*
-                $crate::ConstValue::new::<__Value>($e)
+                    <$var $(<$($vgeneric),*>)? as $crate::ConstVariable>::Key,
+                    <$var $(<$($vgeneric),*>)? as $crate::ConstVariable>::Value>();)*
+                $crate::ConstValue::new::<<$cvar $(<$($generic),*>)? as $crate::ConstVariable>::Value>($e)
             });
         }
 
         #[doc(hidden)]
-        impl $crate::Action for __CustomSetAction {
+        impl<$($($generic : 'static),*)?> $crate::Action for __CustomSetAction<$($($generic),*)?> {
             type Output = ();
-            type Vars<Vars: $crate::VariableList> = __CustomVariableList<Vars>;
+            type Vars<Vars: $crate::VariableList> = __CustomVariableList<$($($generic,)*)? Vars>;
 
             #[inline(always)]
             fn eval<Vars: $crate::VariableList>(self) -> Self::Output {
@@ -470,7 +463,7 @@ macro_rules! ctx_parse {
         }
 
         $crate::ctx_parse! {
-            __CustomSetAction;
+            __CustomSetAction::<$($($generic),*)?>(::core::marker::PhantomData);
             $($rest)*
         }
     }};
@@ -571,6 +564,5 @@ fn test() {
         let _ = { a += 1; };
         pure a
     };
-
     assert_eq!(action.start_eval(), 3);
 }

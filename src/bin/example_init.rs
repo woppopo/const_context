@@ -1,3 +1,5 @@
+#![feature(inline_const)]
+
 use const_context::{ctx, Action, ConstVariable};
 
 mod need_init {

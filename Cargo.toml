@@ -1,6 +1,6 @@
 [package]
 name = "const_context"
-version = "0.5.2"
+version = "0.6.0"
 edition = "2021"
 license = "CC0-1.0"
 publish = false

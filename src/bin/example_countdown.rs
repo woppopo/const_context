@@ -25,7 +25,7 @@ fn two() -> impl Action {
         set Count = match a {
             Countdown::Three => Countdown::Two,
             _ => panic!(),
-        }, where a = Count;
+        } where a <- get Count;
     }
 }
 
@@ -35,7 +35,7 @@ fn one() -> impl Action {
         set Count = match a {
             Countdown::Two => Countdown::One,
             _ => panic!(),
-        }, where a = Count;
+        } where a <- get Count;
     }
 }
 
@@ -45,7 +45,7 @@ fn go() -> impl Action {
         set Count = match a {
             Countdown::One => Countdown::Go,
             _ => panic!(),
-        }, where a = Count;
+        } where a <- get Count;
     }
 }
 

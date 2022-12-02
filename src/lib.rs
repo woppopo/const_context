@@ -12,6 +12,7 @@
 
 #[cfg(feature = "conditional")]
 pub mod conditional;
+mod parse_set;
 
 use core::any::TypeId;
 use core::intrinsics::const_allocate;
@@ -490,84 +491,12 @@ macro_rules! ctx_action {
     (get $cvar:ty) => {
         $crate::GetAction::<$cvar>::new()
     };
-    (set <$(const $cp:ident: $ct:ty = $ce:expr,)* $($gt:ident $(: $gb:path)? = $gi:ty),*> $var:ty = $e:expr, where $($bind:ident = $from:ty),+) => {{
-        #[doc(hidden)]
-        #[allow(unused_parens)]
-        struct __CustomSetAction<$(const $cp: $ct,)* $($gt $(: $gb)?),*>(::core::marker::PhantomData<($($gt),*)>);
-
-        #[doc(hidden)]
-        #[allow(unused_parens)]
-        struct __CustomVariableList<$(const $cp: $ct,)* $($gt $(: $gb)?,)* Input: $crate::VariableList>(::core::marker::PhantomData<($($gt,)* Input,)>);
-
-        #[doc(hidden)]
-        impl<$(const $cp: $ct,)* $($gt: 'static $(+ $gb)?,)* Input: $crate::VariableList> $crate::VariableList for __CustomVariableList<$($cp,)* $($gt,)* Input> {
-            type Next = Input;
-            type Key = <$var as $crate::ConstVariable>::Key;
-            type Value = <$var as $crate::ConstVariable>::Value;
-            const VALUE: $crate::VariableListValue<$crate::ConstValue> = $crate::VariableListValue::Has({
-                $(let $bind = $crate::find_variable::<
-                    Input,
-                    <$from as $crate::ConstVariable>::Key,
-                    <$from as $crate::ConstVariable>::Value>();)*
-                $crate::ConstValue::new::<<$var as $crate::ConstVariable>::Value>($e)
-            });
+    (set $($rest:tt)*) => {
+        $crate::ctx_set! {
+            state = parse_dst
+            rest = [ $($rest)* ]
         }
-
-        #[doc(hidden)]
-        impl<$(const $cp: $ct,)* $($gt: 'static $(+ $gb)?),*> $crate::Action for __CustomSetAction<$($cp,)* $($gt),*> {
-            type Output = ();
-            type Vars<Vars: $crate::VariableList> = __CustomVariableList<$($cp,)* $($gt,)* Vars>;
-
-            #[inline(always)]
-            fn eval<Vars: $crate::VariableList>(self) -> Self::Output {
-                #[allow(path_statements)]
-                const {
-                    <Self::Vars<Vars> as $crate::VariableList>::VALUE;
-                }
-            }
-        }
-
-        __CustomSetAction::<$({ $ce },)* $($gi),*>(::core::marker::PhantomData)
-    }};
-    (set $var:ty = $e:expr, where $($bind:ident = $from:ty),+) => {{
-        #[doc(hidden)]
-        #[allow(unused_parens)]
-        struct __CustomSetAction;
-
-        #[doc(hidden)]
-        #[allow(unused_parens)]
-        struct __CustomVariableList<Input: $crate::VariableList>(::core::marker::PhantomData<Input>);
-
-        #[doc(hidden)]
-        impl<Input: $crate::VariableList> $crate::VariableList for __CustomVariableList<Input> {
-            type Next = Input;
-            type Key = <$var as $crate::ConstVariable>::Key;
-            type Value = <$var as $crate::ConstVariable>::Value;
-            const VALUE: $crate::VariableListValue<$crate::ConstValue> = $crate::VariableListValue::Has({
-                $(let $bind = $crate::find_variable::<
-                    Input,
-                    <$from as $crate::ConstVariable>::Key,
-                    <$from as $crate::ConstVariable>::Value>();)*
-                $crate::ConstValue::new::<<$var as $crate::ConstVariable>::Value>($e)
-            });
-        }
-
-        #[doc(hidden)]
-        impl $crate::Action for __CustomSetAction {
-            type Output = ();
-            type Vars<Vars: $crate::VariableList> = __CustomVariableList<Vars>;
-
-            #[inline(always)]
-            fn eval<Vars: $crate::VariableList>(self) -> Self::Output {
-                #[allow(path_statements)]
-                const {
-                    <Self::Vars<Vars> as $crate::VariableList>::VALUE;
-                }
-            }
-        }
-
-        __CustomSetAction
-    }};
+    };
     (set $var:ty = $e:expr) => {
         $crate::SetAction::<$var, { $crate::ConstValue::new::<<$var as $crate::ConstVariable>::Value>($e) }>::new()
     };
@@ -601,7 +530,10 @@ fn test() {
 
     let action = ctx! {
         set Var = 45;
-        set Var = a + b, where a = Var, b = Var;
+        set Var = a + b
+        where
+            a <- get Var,
+            b <- get Var;
         get Var
     };
 
@@ -655,7 +587,10 @@ fn test() {
         let _a: u32 = 0;
         type Temp = (u64, u64);
         set Temp = 42;
-        set<T = u64> Generic<T> = a + 0, where a = Generic<T>;
+        set Generic<T> = a + 0
+        where
+            T: 'static = u64,
+            a <- get Generic<T>;
         unset Temp;
     };
 

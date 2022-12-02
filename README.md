@@ -24,7 +24,7 @@ fn initialize() -> impl Action {
 
 fn after_initialization() -> impl Action {
     ctx! {
-        set () = assert!(is_initialized),
+        set () = assert!(is_initialized)
         where
             is_initialized <- get IsInitialized;
         let _ = println!("bar.");

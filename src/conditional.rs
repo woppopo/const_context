@@ -137,7 +137,7 @@ impl<Var: ConstVariable> IntoBoolFromVariableList for IsSet<Var> {
 pub struct IsSetBool<Var: ConstVariable, Vars: VariableList>(PhantomData<(Var, Vars)>);
 
 impl<Var: ConstVariable, Vars: VariableList> IntoBool for IsSetBool<Var, Vars> {
-    const BOOL: bool = { is_variable_in::<Vars, Var::Key, Var::Value>() };
+    const BOOL: bool = is_variable_in::<Vars, Var::Key, Var::Value>();
 }
 
 #[macro_export]

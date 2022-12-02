@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use crate::{Action, VariableList};
+use crate::{is_variable_in, Action, ConstVariable, VariableList};
 
 pub trait TypeBool {}
 
@@ -128,37 +128,28 @@ where
     }
 }
 
+pub struct IsSet<Var: ConstVariable>(PhantomData<Var>);
+
+impl<Var: ConstVariable> IntoBoolFromVariableList for IsSet<Var> {
+    type From<Vars: VariableList> = IsSetBool<Var, Vars>;
+}
+
+pub struct IsSetBool<Var: ConstVariable, Vars: VariableList>(PhantomData<(Var, Vars)>);
+
+impl<Var: ConstVariable, Vars: VariableList> IntoBool for IsSetBool<Var, Vars> {
+    const BOOL: bool = { is_variable_in::<Vars, Var::Key, Var::Value>() };
+}
+
 #[macro_export]
 macro_rules! ctx_if_construct {
     {
-        predicate = (set $var:ident $(<$($param:ident),*>)?)
+        predicate = (set $var:ty)
         where = ()
         then = ($then:expr)
         else = ($else:expr)
-    }=> {{
-        #[doc(hidden)]
-        struct __Condition<$($($param),*)?>(::core::marker::PhantomData<($($($param,)*)?)>);
-
-        #[doc(hidden)]
-        impl<$($($param : 'static),*)?> $crate::conditional::IntoBoolFromVariableList for __Condition<$($($param),*)?> {
-            type From<Vars: $crate::VariableList> = __ConditionBool<$($($param,)*)? Vars>;
-        }
-
-        #[doc(hidden)]
-        struct __ConditionBool<$($($param,)*)? Vars: $crate::VariableList>(::core::marker::PhantomData<($($($param,)*)? Vars,)>);
-
-        #[doc(hidden)]
-        impl<$($($param : 'static,)*)? Vars: $crate::VariableList> $crate::conditional::IntoBool for __ConditionBool<$($($param,)*)? Vars> {
-            const BOOL: bool = {
-                $crate::is_variable_in::<
-                    Vars,
-                    <$var <$($($param),*)?> as $crate::ConstVariable>::Key,
-                    <$var <$($($param),*)?> as $crate::ConstVariable>::Value>()
-            };
-        }
-
-        $crate::conditional::IfAction::<_, _, __Condition<$($($param),*)?>, _>::new($then, $else)
-    }};
+    }=> {
+        $crate::conditional::IfAction::<_, _, $crate::conditional::IsSet::<$var>, _>::new($then, $else)
+    };
     {
         predicate = ( $cond:expr )
         where = ($($id:ident = $var:ty),*)

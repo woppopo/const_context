@@ -11,6 +11,6 @@ publish = false
 default = []
 conditional = []
 
-[[bin]]
-name = "example_mutex"
+[[example]]
+name = "mutex"
 required-features = ["conditional"]

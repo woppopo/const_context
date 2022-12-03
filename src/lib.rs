@@ -589,6 +589,7 @@ fn test() {
         set Temp = 42;
         set Generic<T> = a + 0
         where
+            const TEST: u32 = 0,
             T: 'static = u64,
             a <- get Generic<T>;
         unset Temp;

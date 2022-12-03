@@ -296,7 +296,7 @@ macro_rules! ctx_set {
         rest = [ $other:tt $($rest:tt)* ]
     } => {
         $crate::ctx_set! {
-            state = parse_bind_from
+            state = parse_const_param
             dst = [ $($dst)* ]
             expr = [ $($expr)* ]
             binds = [ $($bind)* ]

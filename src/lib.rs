@@ -9,7 +9,6 @@
 #![feature(const_type_name)]
 #![feature(core_intrinsics)]
 #![feature(inline_const)]
-
 #[cfg(feature = "conditional")]
 pub mod conditional;
 mod parse_set;
@@ -336,17 +335,17 @@ where
     fn eval<Vars: VariableList>(self) -> Self::Output {}
 }
 
-pub struct PanicAction<const MSG: &'static str>;
+pub struct PanicAction<const MSG: &'static str, T>(PhantomData<T>);
 
-impl<const MSG: &'static str> PanicAction<MSG> {
+impl<const MSG: &'static str, T> PanicAction<MSG, T> {
     #[inline(always)]
     pub const fn new() -> Self {
-        Self
+        Self(PhantomData)
     }
 }
 
-impl<const MSG: &'static str> Action for PanicAction<MSG> {
-    type Output = ();
+impl<const MSG: &'static str, T> Action for PanicAction<MSG, T> {
+    type Output = T;
     type Vars<Vars: VariableList> = Vars;
 
     #[inline(always)]
@@ -504,7 +503,7 @@ macro_rules! ctx_action {
         $crate::UnsetAction::<$cvar>::new()
     };
     (panic $msg:expr) => {
-        $crate::PanicAction::<{ $msg }>::new()
+        $crate::PanicAction::<{ $msg }, _>::new()
     };
     ($action:expr) => {
         $action

@@ -1,3 +1,4 @@
+#![feature(generic_const_exprs)]
 #![feature(inline_const)]
 
 use core::ops::{Deref, DerefMut};
@@ -11,7 +12,7 @@ pub struct Locked<const ID: Id>;
 
 impl<const ID: Id> ConstVariable for Locked<ID> {
     type Key = Self;
-    type Value = Self;
+    type Value = ();
 }
 
 pub struct StaticMutex<const ID: Id, T>(Mutex<T>);
@@ -27,7 +28,7 @@ impl<const ID: Id, T> StaticMutex<ID, T> {
                 ctx! { panic "Double locks" }
             else
                 ctx! {
-                    set Locked<{ ID }> = Locked where const ID: Id = ID;
+                    set Locked<{ ID }> = ();
                     pure match self.0.lock() {
                         Ok(guard) => Ok(StaticMutexGuard(guard)),
                         Err(poison) => Err(PoisonError::new(StaticMutexGuard(poison.into_inner()))),

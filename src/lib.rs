@@ -490,14 +490,14 @@ macro_rules! ctx_action {
     (get $cvar:ty) => {
         $crate::GetAction::<$cvar>::new()
     };
+    (set $var:ty = $e:expr) => {
+        $crate::SetAction::<$var, { $crate::ConstValue::new::<<$var as $crate::ConstVariable>::Value>($e) }>::new()
+    };
     (set $($rest:tt)*) => {
         $crate::ctx_set! {
             state = parse_dst
             rest = [ $($rest)* ]
         }
-    };
-    (set $var:ty = $e:expr) => {
-        $crate::SetAction::<$var, { $crate::ConstValue::new::<<$var as $crate::ConstVariable>::Value>($e) }>::new()
     };
     (unset $cvar:ty) => {
         $crate::UnsetAction::<$cvar>::new()
